@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * Autonomous Taxi Fleet Management API
- * OpenAPI spec version: 0.2.0
+ * OpenAPI spec version: 0.3.0
  */
 
 export interface HistoryPoint {
@@ -14,4 +14,9 @@ export interface HistoryPoint {
   waitTime: number;
   reward: number;
   episodeReward: number;
+  /** Average Q-value snapshot at this step */
+  avgQValue: number;
+  /** Exploration rate at this step */
+  epsilon: number;
+  predictionAccuracy: number;
 }

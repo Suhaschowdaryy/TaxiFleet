@@ -6,6 +6,10 @@
  * OpenAPI spec version: 0.3.0
  */
 
-export interface SimulationRequest {
-  steps?: number;
+export interface TaxiDebugInfo {
+  chosenAction: string;
+  qValue: number;
+  demandScore: number;
+  rebalancingScore: number;
+  stateKey: string;
 }

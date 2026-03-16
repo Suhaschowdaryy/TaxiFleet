@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Api
-  version: 0.2.0
+  version: 0.3.0
   description: Autonomous Taxi Fleet Management API
 servers:
   - url: /api
@@ -81,6 +81,25 @@ components:
         steps:
           type: integer
           default: 1
+    TaxiDebugInfo:
+      type: object
+      properties:
+        chosenAction:
+          type: string
+        qValue:
+          type: number
+        demandScore:
+          type: number
+        rebalancingScore:
+          type: number
+        stateKey:
+          type: string
+      required:
+        - chosenAction
+        - qValue
+        - demandScore
+        - rebalancingScore
+        - stateKey
     Zone:
       type: object
       properties:
@@ -92,10 +111,8 @@ components:
           type: integer
         demand:
           type: number
-          description: Base demand lambda (Poisson)
         predictedDemand:
           type: number
-          description: Demand predicted by the EMA model for next step
         waitingPassengers:
           type: integer
         taxiCount:
@@ -104,10 +121,11 @@ components:
           type: string
         trafficLevel:
           type: number
-          description: Traffic congestion level 0.0 to 1.0
         category:
           type: string
-          description: Zone category (business, residential, transit, etc.)
+        imbalance:
+          type: number
+          description: predictedDemand - taxiSupply (positive = underserved)
       required:
         - id
         - row
@@ -119,6 +137,7 @@ components:
         - name
         - trafficLevel
         - category
+        - imbalance
     Taxi:
       type: object
       properties:
@@ -140,11 +159,13 @@ components:
         destinationZone:
           type: string
           nullable: true
-          description: Name of the destination zone when carrying a passenger
         tripTimeRemaining:
           type: integer
           nullable: true
-          description: Steps remaining until trip completes
+        debugInfo:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/TaxiDebugInfo"
       required:
         - id
         - row
@@ -153,6 +174,32 @@ components:
         - tripsCompleted
         - revenue
         - lastAction
+    RLAnalytics:
+      type: object
+      properties:
+        epsilon:
+          type: number
+          description: Current exploration rate
+        replayBufferSize:
+          type: integer
+          description: Number of transitions stored
+        episodeNumber:
+          type: integer
+        avgQValue:
+          type: number
+          description: Average Q-value across all entries this episode
+        predictionAccuracy:
+          type: number
+          description: 1 - avg(|predicted - actual| / max(actual, 1)) over last 10 steps
+        totalQUpdates:
+          type: integer
+      required:
+        - epsilon
+        - replayBufferSize
+        - episodeNumber
+        - avgQValue
+        - predictionAccuracy
+        - totalQUpdates
     SimulationMetrics:
       type: object
       properties:
@@ -170,7 +217,6 @@ components:
           type: integer
         episodeReward:
           type: number
-          description: Cumulative reward for the current 50-step episode
       required:
         - totalTripsCompleted
         - totalRevenue
@@ -196,6 +242,14 @@ components:
           type: number
         episodeReward:
           type: number
+        avgQValue:
+          type: number
+          description: Average Q-value snapshot at this step
+        epsilon:
+          type: number
+          description: Exploration rate at this step
+        predictionAccuracy:
+          type: number
       required:
         - timeStep
         - tripsCompleted
@@ -204,6 +258,9 @@ components:
         - waitTime
         - reward
         - episodeReward
+        - avgQValue
+        - epsilon
+        - predictionAccuracy
     SimulationState:
       type: object
       properties:
@@ -221,14 +278,20 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/HistoryPoint"
+        rlAnalytics:
+          $ref: "#/components/schemas/RLAnalytics"
         gridSize:
           type: integer
         running:
+          type: boolean
+        debugMode:
           type: boolean
       required:
         - taxis
         - zones
         - metrics
         - history
+        - rlAnalytics
         - gridSize
         - running
+        - debugMode

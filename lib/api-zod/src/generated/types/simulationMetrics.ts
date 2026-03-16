@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * Autonomous Taxi Fleet Management API
- * OpenAPI spec version: 0.2.0
+ * OpenAPI spec version: 0.3.0
  */
 
 export interface SimulationMetrics {
@@ -13,6 +13,5 @@ export interface SimulationMetrics {
   utilizationRate: number;
   totalReward: number;
   timeStep: number;
-  /** Cumulative reward for the current 50-step episode */
   episodeReward: number;
 }

@@ -3,9 +3,10 @@
  * Do not edit manually.
  * Api
  * Autonomous Taxi Fleet Management API
- * OpenAPI spec version: 0.2.0
+ * OpenAPI spec version: 0.3.0
  */
 import type { HistoryPoint } from "./historyPoint";
+import type { RLAnalytics } from "./rLAnalytics";
 import type { SimulationMetrics } from "./simulationMetrics";
 import type { Taxi } from "./taxi";
 import type { Zone } from "./zone";
@@ -15,6 +16,8 @@ export interface SimulationState {
   zones: Zone[];
   metrics: SimulationMetrics;
   history: HistoryPoint[];
+  rlAnalytics: RLAnalytics;
   gridSize: number;
   running: boolean;
+  debugMode: boolean;
 }

@@ -3,14 +3,16 @@
  * Do not edit manually.
  * Api
  * Autonomous Taxi Fleet Management API
- * OpenAPI spec version: 0.2.0
+ * OpenAPI spec version: 0.3.0
  */
 
 export * from "./healthStatus";
 export * from "./historyPoint";
+export * from "./rLAnalytics";
 export * from "./simulationMetrics";
 export * from "./simulationRequest";
 export * from "./simulationState";
 export * from "./taxi";
+export * from "./taxiDebugInfo";
 export * from "./taxiStatus";
 export * from "./zone";

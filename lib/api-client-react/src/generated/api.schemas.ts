@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * Autonomous Taxi Fleet Management API
- * OpenAPI spec version: 0.2.0
+ * OpenAPI spec version: 0.3.0
  */
 export interface HealthStatus {
   status: string;
@@ -13,21 +13,27 @@ export interface SimulationRequest {
   steps?: number;
 }
 
+export interface TaxiDebugInfo {
+  chosenAction: string;
+  qValue: number;
+  demandScore: number;
+  rebalancingScore: number;
+  stateKey: string;
+}
+
 export interface Zone {
   id: string;
   row: number;
   col: number;
-  /** Base demand lambda (Poisson) */
   demand: number;
-  /** Demand predicted by the EMA model for next step */
   predictedDemand: number;
   waitingPassengers: number;
   taxiCount: number;
   name: string;
-  /** Traffic congestion level 0.0 to 1.0 */
   trafficLevel: number;
-  /** Zone category (business, residential, transit, etc.) */
   category: string;
+  /** predictedDemand - taxiSupply (positive = underserved) */
+  imbalance: number;
 }
 
 export type TaxiStatus = (typeof TaxiStatus)[keyof typeof TaxiStatus];
@@ -46,10 +52,22 @@ export interface Taxi {
   tripsCompleted: number;
   revenue: number;
   lastAction: string;
-  /** Name of the destination zone when carrying a passenger */
   destinationZone?: string | null;
-  /** Steps remaining until trip completes */
   tripTimeRemaining?: number | null;
+  debugInfo?: TaxiDebugInfo | null;
+}
+
+export interface RLAnalytics {
+  /** Current exploration rate */
+  epsilon: number;
+  /** Number of transitions stored */
+  replayBufferSize: number;
+  episodeNumber: number;
+  /** Average Q-value across all entries this episode */
+  avgQValue: number;
+  /** 1 - avg(|predicted - actual| / max(actual, 1)) over last 10 steps */
+  predictionAccuracy: number;
+  totalQUpdates: number;
 }
 
 export interface SimulationMetrics {
@@ -59,7 +77,6 @@ export interface SimulationMetrics {
   utilizationRate: number;
   totalReward: number;
   timeStep: number;
-  /** Cumulative reward for the current 50-step episode */
   episodeReward: number;
 }
 
@@ -71,6 +88,11 @@ export interface HistoryPoint {
   waitTime: number;
   reward: number;
   episodeReward: number;
+  /** Average Q-value snapshot at this step */
+  avgQValue: number;
+  /** Exploration rate at this step */
+  epsilon: number;
+  predictionAccuracy: number;
 }
 
 export interface SimulationState {
@@ -78,6 +100,8 @@ export interface SimulationState {
   zones: Zone[];
   metrics: SimulationMetrics;
   history: HistoryPoint[];
+  rlAnalytics: RLAnalytics;
   gridSize: number;
   running: boolean;
+  debugMode: boolean;
 }

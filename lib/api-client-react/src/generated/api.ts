@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * Autonomous Taxi Fleet Management API
- * OpenAPI spec version: 0.2.0
+ * OpenAPI spec version: 0.3.0
  */
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
