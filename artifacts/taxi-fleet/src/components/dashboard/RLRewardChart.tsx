@@ -2,45 +2,50 @@ import {
   ResponsiveContainer,
   AreaChart,
   Area,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   Legend,
+  ReferenceLine
 } from "recharts";
 import { HistoryPoint } from "@workspace/api-client-react";
 
-interface MetricsChartProps {
+interface RLRewardChartProps {
   data: HistoryPoint[];
+  currentEpisode: number;
 }
 
-export function MetricsChart({ data }: MetricsChartProps) {
+export function RLRewardChart({ data, currentEpisode }: RLRewardChartProps) {
   // Take last 50 points for visualization
   const displayData = data.slice(-50).map(d => ({
     ...d,
-    utilizationRateRaw: d.utilizationRate,
   }));
 
   if (data.length === 0) {
     return (
       <div className="h-full w-full flex items-center justify-center text-muted-foreground text-sm border border-dashed border-border rounded-lg bg-background/50">
-        No simulation data yet. Start the fleet to gather metrics.
+        No RL data available yet.
       </div>
     );
   }
 
   return (
-    <div className="h-full w-full min-h-[300px]">
+    <div className="h-full w-full min-h-[300px] flex flex-col relative">
+      <div className="absolute top-0 right-0 z-10 flex items-center gap-2">
+        <span className="px-2 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase bg-primary/20 text-primary border border-primary/30">
+          Episode {currentEpisode}
+        </span>
+      </div>
+      
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={displayData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+        <AreaChart data={displayData} margin={{ top: 20, right: 10, left: 0, bottom: 0 }}>
           <defs>
-            <linearGradient id="colorUtil" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
-              <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
-            </linearGradient>
-            <linearGradient id="colorTrips" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="hsl(var(--accent))" stopOpacity={0.3}/>
-              <stop offset="95%" stopColor="hsl(var(--accent))" stopOpacity={0}/>
+            <linearGradient id="colorEpisodeReward" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="hsl(var(--chart-3))" stopOpacity={0.3}/>
+              <stop offset="95%" stopColor="hsl(var(--chart-3))" stopOpacity={0}/>
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} opacity={0.5} />
@@ -59,18 +64,18 @@ export function MetricsChart({ data }: MetricsChartProps) {
             fontSize={12}
             tickLine={false}
             axisLine={false}
-            tickFormatter={(value) => `${value}%`}
             tickMargin={10}
           />
           <YAxis 
             yAxisId="right" 
             orientation="right" 
-            stroke="hsl(var(--accent))" 
+            stroke="hsl(var(--chart-3))" 
             fontSize={12}
             tickLine={false}
             axisLine={false}
             tickMargin={10}
           />
+          <ReferenceLine yAxisId="left" y={0} stroke="hsl(var(--border))" strokeDasharray="3 3" />
           <Tooltip
             contentStyle={{ 
               backgroundColor: 'hsl(var(--popover))',
@@ -84,42 +89,28 @@ export function MetricsChart({ data }: MetricsChartProps) {
             labelStyle={{ color: 'hsl(var(--muted-foreground))', marginBottom: '8px', fontSize: '12px', borderBottom: '1px solid hsl(var(--border))', paddingBottom: '4px' }}
           />
           <Legend wrapperStyle={{ paddingTop: '20px', fontSize: '12px', opacity: 0.8 }} iconType="circle" />
-          <Area 
+          
+          <Line 
             yAxisId="left"
-            type="monotone" 
-            dataKey="utilizationRateRaw" 
-            name="Utilization (%)"
+            type="step" 
+            dataKey="reward" 
+            name="Step Reward"
             stroke="hsl(var(--primary))" 
-            fillOpacity={1} 
-            fill="url(#colorUtil)"
-            strokeWidth={3}
+            strokeWidth={2}
             dot={false}
-            activeDot={{ r: 6, fill: "hsl(var(--primary))", strokeWidth: 2, stroke: "hsl(var(--background))" }}
-          />
-          <Area 
-            yAxisId="right"
-            type="monotone" 
-            dataKey="tripsCompleted" 
-            name="Trips Completed"
-            stroke="hsl(var(--accent))" 
-            fillOpacity={1} 
-            fill="url(#colorTrips)"
-            strokeWidth={3}
-            dot={false}
-            activeDot={{ r: 6, fill: "hsl(var(--accent))", strokeWidth: 2, stroke: "hsl(var(--background))" }}
+            activeDot={{ r: 4 }}
           />
           <Area 
             yAxisId="right"
             type="monotone" 
             dataKey="episodeReward" 
-            name="Episode Reward"
+            name="Episode Cum. Reward"
             stroke="hsl(var(--chart-3))" 
-            fillOpacity={0} 
-            fill="none"
-            strokeWidth={2}
-            strokeDasharray="4 4"
+            fillOpacity={1} 
+            fill="url(#colorEpisodeReward)"
+            strokeWidth={3}
             dot={false}
-            activeDot={{ r: 4, fill: "hsl(var(--chart-3))", strokeWidth: 2, stroke: "hsl(var(--background))" }}
+            activeDot={{ r: 6, fill: "hsl(var(--chart-3))", strokeWidth: 2, stroke: "hsl(var(--background))" }}
           />
         </AreaChart>
       </ResponsiveContainer>

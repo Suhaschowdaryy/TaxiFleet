@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * Autonomous Taxi Fleet Management API
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 import type { TaxiStatus } from "./taxiStatus";
 
@@ -15,4 +15,8 @@ export interface Taxi {
   tripsCompleted: number;
   revenue: number;
   lastAction: string;
+  /** Name of the destination zone when carrying a passenger */
+  destinationZone?: string | null;
+  /** Steps remaining until trip completes */
+  tripTimeRemaining?: number | null;
 }

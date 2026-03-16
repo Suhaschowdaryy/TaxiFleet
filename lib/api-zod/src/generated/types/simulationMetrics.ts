@@ -3,15 +3,16 @@
  * Do not edit manually.
  * Api
  * Autonomous Taxi Fleet Management API
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 
 export interface SimulationMetrics {
   totalTripsCompleted: number;
   totalRevenue: number;
   averageWaitTime: number;
-  /** Percentage of taxis actively carrying passengers */
   utilizationRate: number;
   totalReward: number;
   timeStep: number;
+  /** Cumulative reward for the current 50-step episode */
+  episodeReward: number;
 }

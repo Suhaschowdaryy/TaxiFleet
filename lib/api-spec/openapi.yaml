@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Api
-  version: 0.1.0
+  version: 0.2.0
   description: Autonomous Taxi Fleet Management API
 servers:
   - url: /api
@@ -17,7 +17,6 @@ paths:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -30,7 +29,6 @@ paths:
       operationId: runSimulation
       tags: [simulation]
       summary: Run taxi simulation step
-      description: Advances the simulation and returns current state
       requestBody:
         required: false
         content:
@@ -48,7 +46,7 @@ paths:
     post:
       operationId: resetSimulation
       tags: [simulation]
-      summary: Reset the simulation to initial state
+      summary: Reset the simulation
       responses:
         "200":
           description: Reset successful
@@ -82,7 +80,6 @@ components:
       properties:
         steps:
           type: integer
-          description: Number of simulation steps to advance
           default: 1
     Zone:
       type: object
@@ -95,21 +92,33 @@ components:
           type: integer
         demand:
           type: number
-          description: Current passenger demand (Poisson lambda)
+          description: Base demand lambda (Poisson)
+        predictedDemand:
+          type: number
+          description: Demand predicted by the EMA model for next step
         waitingPassengers:
           type: integer
         taxiCount:
           type: integer
         name:
           type: string
+        trafficLevel:
+          type: number
+          description: Traffic congestion level 0.0 to 1.0
+        category:
+          type: string
+          description: Zone category (business, residential, transit, etc.)
       required:
         - id
         - row
         - col
         - demand
+        - predictedDemand
         - waitingPassengers
         - taxiCount
         - name
+        - trafficLevel
+        - category
     Taxi:
       type: object
       properties:
@@ -128,6 +137,14 @@ components:
           type: number
         lastAction:
           type: string
+        destinationZone:
+          type: string
+          nullable: true
+          description: Name of the destination zone when carrying a passenger
+        tripTimeRemaining:
+          type: integer
+          nullable: true
+          description: Steps remaining until trip completes
       required:
         - id
         - row
@@ -147,11 +164,13 @@ components:
           type: number
         utilizationRate:
           type: number
-          description: Percentage of taxis actively carrying passengers
         totalReward:
           type: number
         timeStep:
           type: integer
+        episodeReward:
+          type: number
+          description: Cumulative reward for the current 50-step episode
       required:
         - totalTripsCompleted
         - totalRevenue
@@ -159,6 +178,7 @@ components:
         - utilizationRate
         - totalReward
         - timeStep
+        - episodeReward
     HistoryPoint:
       type: object
       properties:
@@ -174,6 +194,8 @@ components:
           type: number
         reward:
           type: number
+        episodeReward:
+          type: number
       required:
         - timeStep
         - tripsCompleted
@@ -181,6 +203,7 @@ components:
         - utilizationRate
         - waitTime
         - reward
+        - episodeReward
     SimulationState:
       type: object
       properties:

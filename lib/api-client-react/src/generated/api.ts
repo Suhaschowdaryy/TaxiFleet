@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * Autonomous Taxi Fleet Management API
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
@@ -32,7 +32,6 @@ type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
- * Returns server health status
  * @summary Health check
  */
 export const getHealthCheckUrl = () => {
@@ -108,7 +107,6 @@ export function useHealthCheck<
 }
 
 /**
- * Advances the simulation and returns current state
  * @summary Run taxi simulation step
  */
 export const getRunSimulationUrl = () => {
@@ -195,7 +193,7 @@ export const useRunSimulation = <
 };
 
 /**
- * @summary Reset the simulation to initial state
+ * @summary Reset the simulation
  */
 export const getResetSimulationUrl = () => {
   return `/api/simulate/reset`;
@@ -253,7 +251,7 @@ export type ResetSimulationMutationResult = NonNullable<
 export type ResetSimulationMutationError = ErrorType<unknown>;
 
 /**
- * @summary Reset the simulation to initial state
+ * @summary Reset the simulation
  */
 export const useResetSimulation = <
   TError = ErrorType<unknown>,

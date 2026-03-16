@@ -3,16 +3,22 @@
  * Do not edit manually.
  * Api
  * Autonomous Taxi Fleet Management API
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 
 export interface Zone {
   id: string;
   row: number;
   col: number;
-  /** Current passenger demand (Poisson lambda) */
+  /** Base demand lambda (Poisson) */
   demand: number;
+  /** Demand predicted by the EMA model for next step */
+  predictedDemand: number;
   waitingPassengers: number;
   taxiCount: number;
   name: string;
+  /** Traffic congestion level 0.0 to 1.0 */
+  trafficLevel: number;
+  /** Zone category (business, residential, transit, etc.) */
+  category: string;
 }

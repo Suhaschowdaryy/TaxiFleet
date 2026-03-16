@@ -5,7 +5,8 @@ import {
   Activity, 
   Clock, 
   Route, 
-  DollarSign 
+  DollarSign,
+  BrainCircuit
 } from "lucide-react";
 import { useSimulationController } from "@/hooks/use-simulation-controller";
 import { formatCurrency, formatPercent } from "@/lib/utils";
@@ -13,6 +14,7 @@ import { StatCard } from "@/components/dashboard/StatCard";
 import { CityMap } from "@/components/dashboard/CityMap";
 import { MetricsChart } from "@/components/dashboard/MetricsChart";
 import { TaxiTable } from "@/components/dashboard/TaxiTable";
+import { RLRewardChart } from "@/components/dashboard/RLRewardChart";
 
 export default function Dashboard() {
   const { 
@@ -108,15 +110,15 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           
           {/* Left Panel: City Map */}
-          <div className="lg:col-span-5 xl:col-span-4 h-[600px] lg:h-auto">
+          <div className="lg:col-span-6 xl:col-span-5 h-[800px] lg:h-[700px]">
             <CityMap zones={zones} taxis={taxis} gridSize={gridSize} />
           </div>
 
           {/* Right Panel: Metrics & Charts */}
-          <div className="lg:col-span-7 xl:col-span-8 flex flex-col gap-6">
+          <div className="lg:col-span-6 xl:col-span-7 flex flex-col gap-6">
             
             {/* Top Stat Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <StatCard 
                 title="Utilization Rate" 
                 value={formatPercent(metrics.utilizationRate)}
@@ -141,16 +143,33 @@ export default function Dashboard() {
                 icon={<DollarSign className="w-5 h-5" />}
                 colorClass="border-amber-500"
               />
+              <StatCard 
+                title="Episode Reward" 
+                value={metrics.episodeReward > 0 ? `+${Math.round(metrics.episodeReward)}` : `${Math.round(metrics.episodeReward)}`}
+                icon={<BrainCircuit className="w-5 h-5" />}
+                colorClass={metrics.episodeReward >= 0 ? "border-emerald-400" : "border-red-400"}
+              />
             </div>
 
-            {/* Performance Chart */}
-            <div className="flex-1 bg-card border border-card-border rounded-xl p-5 shadow-sm min-h-[300px] flex flex-col">
-              <div className="mb-4">
-                <h3 className="font-semibold text-lg tracking-tight">Fleet Performance History</h3>
-                <p className="text-xs text-muted-foreground">Utilization vs. Completed Trips over time</p>
+            {/* Performance Charts */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1">
+              <div className="bg-card border border-card-border rounded-xl p-5 shadow-sm flex flex-col min-h-[300px]">
+                <div className="mb-4">
+                  <h3 className="font-semibold text-lg tracking-tight">Fleet Performance History</h3>
+                  <p className="text-xs text-muted-foreground">Utilization vs. Completed Trips over time</p>
+                </div>
+                <div className="flex-1 -ml-4">
+                  <MetricsChart data={history} />
+                </div>
               </div>
-              <div className="flex-1 -ml-4">
-                <MetricsChart data={history} />
+              <div className="bg-card border border-card-border rounded-xl p-5 shadow-sm flex flex-col min-h-[300px]">
+                <div className="mb-4">
+                  <h3 className="font-semibold text-lg tracking-tight">RL Agent Performance</h3>
+                  <p className="text-xs text-muted-foreground">Step reward & episode cumulative reward</p>
+                </div>
+                <div className="flex-1 -ml-4">
+                  <RLRewardChart data={history} currentEpisode={Math.floor(metrics.timeStep / 50) + 1} />
+                </div>
               </div>
             </div>
           </div>

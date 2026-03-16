@@ -3,12 +3,11 @@
  * Do not edit manually.
  * Api
  * Autonomous Taxi Fleet Management API
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 import * as zod from "zod";
 
 /**
- * Returns server health status
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({
@@ -16,16 +15,12 @@ export const HealthCheckResponse = zod.object({
 });
 
 /**
- * Advances the simulation and returns current state
  * @summary Run taxi simulation step
  */
 export const runSimulationBodyStepsDefault = 1;
 
 export const RunSimulationBody = zod.object({
-  steps: zod
-    .number()
-    .default(runSimulationBodyStepsDefault)
-    .describe("Number of simulation steps to advance"),
+  steps: zod.number().default(runSimulationBodyStepsDefault),
 });
 
 export const RunSimulationResponse = zod.object({
@@ -38,6 +33,14 @@ export const RunSimulationResponse = zod.object({
       tripsCompleted: zod.number(),
       revenue: zod.number(),
       lastAction: zod.string(),
+      destinationZone: zod
+        .string()
+        .nullish()
+        .describe("Name of the destination zone when carrying a passenger"),
+      tripTimeRemaining: zod
+        .number()
+        .nullish()
+        .describe("Steps remaining until trip completes"),
     }),
   ),
   zones: zod.array(
@@ -45,23 +48,31 @@ export const RunSimulationResponse = zod.object({
       id: zod.string(),
       row: zod.number(),
       col: zod.number(),
-      demand: zod
+      demand: zod.number().describe("Base demand lambda (Poisson)"),
+      predictedDemand: zod
         .number()
-        .describe("Current passenger demand (Poisson lambda)"),
+        .describe("Demand predicted by the EMA model for next step"),
       waitingPassengers: zod.number(),
       taxiCount: zod.number(),
       name: zod.string(),
+      trafficLevel: zod
+        .number()
+        .describe("Traffic congestion level 0.0 to 1.0"),
+      category: zod
+        .string()
+        .describe("Zone category (business, residential, transit, etc.)"),
     }),
   ),
   metrics: zod.object({
     totalTripsCompleted: zod.number(),
     totalRevenue: zod.number(),
     averageWaitTime: zod.number(),
-    utilizationRate: zod
-      .number()
-      .describe("Percentage of taxis actively carrying passengers"),
+    utilizationRate: zod.number(),
     totalReward: zod.number(),
     timeStep: zod.number(),
+    episodeReward: zod
+      .number()
+      .describe("Cumulative reward for the current 50-step episode"),
   }),
   history: zod.array(
     zod.object({
@@ -71,6 +82,7 @@ export const RunSimulationResponse = zod.object({
       utilizationRate: zod.number(),
       waitTime: zod.number(),
       reward: zod.number(),
+      episodeReward: zod.number(),
     }),
   ),
   gridSize: zod.number(),
@@ -78,7 +90,7 @@ export const RunSimulationResponse = zod.object({
 });
 
 /**
- * @summary Reset the simulation to initial state
+ * @summary Reset the simulation
  */
 export const ResetSimulationResponse = zod.object({
   taxis: zod.array(
@@ -90,6 +102,14 @@ export const ResetSimulationResponse = zod.object({
       tripsCompleted: zod.number(),
       revenue: zod.number(),
       lastAction: zod.string(),
+      destinationZone: zod
+        .string()
+        .nullish()
+        .describe("Name of the destination zone when carrying a passenger"),
+      tripTimeRemaining: zod
+        .number()
+        .nullish()
+        .describe("Steps remaining until trip completes"),
     }),
   ),
   zones: zod.array(
@@ -97,23 +117,31 @@ export const ResetSimulationResponse = zod.object({
       id: zod.string(),
       row: zod.number(),
       col: zod.number(),
-      demand: zod
+      demand: zod.number().describe("Base demand lambda (Poisson)"),
+      predictedDemand: zod
         .number()
-        .describe("Current passenger demand (Poisson lambda)"),
+        .describe("Demand predicted by the EMA model for next step"),
       waitingPassengers: zod.number(),
       taxiCount: zod.number(),
       name: zod.string(),
+      trafficLevel: zod
+        .number()
+        .describe("Traffic congestion level 0.0 to 1.0"),
+      category: zod
+        .string()
+        .describe("Zone category (business, residential, transit, etc.)"),
     }),
   ),
   metrics: zod.object({
     totalTripsCompleted: zod.number(),
     totalRevenue: zod.number(),
     averageWaitTime: zod.number(),
-    utilizationRate: zod
-      .number()
-      .describe("Percentage of taxis actively carrying passengers"),
+    utilizationRate: zod.number(),
     totalReward: zod.number(),
     timeStep: zod.number(),
+    episodeReward: zod
+      .number()
+      .describe("Cumulative reward for the current 50-step episode"),
   }),
   history: zod.array(
     zod.object({
@@ -123,6 +151,7 @@ export const ResetSimulationResponse = zod.object({
       utilizationRate: zod.number(),
       waitTime: zod.number(),
       reward: zod.number(),
+      episodeReward: zod.number(),
     }),
   ),
   gridSize: zod.number(),
@@ -142,6 +171,14 @@ export const GetSimulationStateResponse = zod.object({
       tripsCompleted: zod.number(),
       revenue: zod.number(),
       lastAction: zod.string(),
+      destinationZone: zod
+        .string()
+        .nullish()
+        .describe("Name of the destination zone when carrying a passenger"),
+      tripTimeRemaining: zod
+        .number()
+        .nullish()
+        .describe("Steps remaining until trip completes"),
     }),
   ),
   zones: zod.array(
@@ -149,23 +186,31 @@ export const GetSimulationStateResponse = zod.object({
       id: zod.string(),
       row: zod.number(),
       col: zod.number(),
-      demand: zod
+      demand: zod.number().describe("Base demand lambda (Poisson)"),
+      predictedDemand: zod
         .number()
-        .describe("Current passenger demand (Poisson lambda)"),
+        .describe("Demand predicted by the EMA model for next step"),
       waitingPassengers: zod.number(),
       taxiCount: zod.number(),
       name: zod.string(),
+      trafficLevel: zod
+        .number()
+        .describe("Traffic congestion level 0.0 to 1.0"),
+      category: zod
+        .string()
+        .describe("Zone category (business, residential, transit, etc.)"),
     }),
   ),
   metrics: zod.object({
     totalTripsCompleted: zod.number(),
     totalRevenue: zod.number(),
     averageWaitTime: zod.number(),
-    utilizationRate: zod
-      .number()
-      .describe("Percentage of taxis actively carrying passengers"),
+    utilizationRate: zod.number(),
     totalReward: zod.number(),
     timeStep: zod.number(),
+    episodeReward: zod
+      .number()
+      .describe("Cumulative reward for the current 50-step episode"),
   }),
   history: zod.array(
     zod.object({
@@ -175,6 +220,7 @@ export const GetSimulationStateResponse = zod.object({
       utilizationRate: zod.number(),
       waitTime: zod.number(),
       reward: zod.number(),
+      episodeReward: zod.number(),
     }),
   ),
   gridSize: zod.number(),

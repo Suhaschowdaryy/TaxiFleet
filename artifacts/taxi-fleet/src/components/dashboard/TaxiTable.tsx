@@ -26,13 +26,8 @@ export function TaxiTable({ taxis }: TaxiTableProps) {
     }
   };
 
-  const getZoneName = (row: number, col: number) => {
-    const zones = [
-      ["Downtown North", "Midtown", "Airport"],
-      ["West Side", "City Center", "East District"],
-      ["South End", "Financial District", "Uptown"]
-    ];
-    return zones[row]?.[col] || `Zone [${row}, ${col}]`;
+  const getLocationLabel = (row: number, col: number) => {
+    return `R${row}C${col}`;
   };
 
   // Find max revenue for progress bar
@@ -51,11 +46,13 @@ export function TaxiTable({ taxis }: TaxiTableProps) {
       </div>
       
       <div className="overflow-x-auto p-4">
-        <div className="min-w-[800px] flex flex-col gap-2">
-          <div className="grid grid-cols-[1fr_2fr_2fr_1fr_2fr] gap-4 px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+        <div className="min-w-[1000px] flex flex-col gap-2">
+          <div className="grid grid-cols-[1fr_1.5fr_2fr_2fr_1fr_1fr_2fr] gap-4 px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
             <div>Taxi ID</div>
             <div>Location</div>
             <div>Status</div>
+            <div>Destination</div>
+            <div className="text-right">ETA</div>
             <div className="text-right">Trips</div>
             <div>Revenue</div>
           </div>
@@ -64,7 +61,7 @@ export function TaxiTable({ taxis }: TaxiTableProps) {
             {taxis.map((taxi) => (
               <div 
                 key={taxi.id} 
-                className="grid grid-cols-[1fr_2fr_2fr_1fr_2fr] gap-4 items-center bg-background/50 hover:bg-secondary/40 border border-border hover:border-border/80 rounded-lg p-3 transition-all duration-300 relative overflow-hidden group hover:shadow-[0_4px_20px_-5px_rgba(0,0,0,0.3)] hover:-translate-y-0.5"
+                className="grid grid-cols-[1fr_1.5fr_2fr_2fr_1fr_1fr_2fr] gap-4 items-center bg-background/50 hover:bg-secondary/40 border border-border hover:border-border/80 rounded-lg p-3 transition-all duration-300 relative overflow-hidden group hover:shadow-[0_4px_20px_-5px_rgba(0,0,0,0.3)] hover:-translate-y-0.5"
               >
                 {/* Left indicator bar */}
                 <div className={cn("absolute left-0 top-0 bottom-0 w-1 opacity-70", getStatusColor(taxi.status))}></div>
@@ -75,12 +72,20 @@ export function TaxiTable({ taxis }: TaxiTableProps) {
                 </div>
                 
                 <div className="flex flex-col">
-                  <span className="text-foreground font-medium">{getZoneName(taxi.row, taxi.col)}</span>
+                  <span className="text-foreground font-medium">{getLocationLabel(taxi.row, taxi.col)}</span>
                   <span className="text-xs text-muted-foreground font-mono">[{taxi.row}, {taxi.col}]</span>
                 </div>
                 
                 <div>
                   {getStatusBadge(taxi.status)}
+                </div>
+
+                <div className="text-sm font-medium text-muted-foreground truncate">
+                  {taxi.status === 'carrying_passenger' && taxi.destinationZone ? taxi.destinationZone : '—'}
+                </div>
+
+                <div className="text-right font-mono text-muted-foreground">
+                  {taxi.tripTimeRemaining != null ? `${taxi.tripTimeRemaining}t` : '—'}
                 </div>
                 
                 <div className="text-right font-mono text-foreground">

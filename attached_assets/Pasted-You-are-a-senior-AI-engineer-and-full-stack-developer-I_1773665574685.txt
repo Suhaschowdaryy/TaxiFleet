@@ -1,0 +1,307 @@
+You are a senior AI engineer and full-stack developer. I already have a working taxi fleet simulation project with:
+
+* a 3×3 city grid (9 zones)
+* Poisson passenger demand generation
+* 6 taxis moving between zones
+* a FastAPI backend
+* a React / Next.js dashboard
+* frontend polling every 2 seconds
+* dashboard showing utilization, wait time, trips, revenue
+
+Currently taxis follow a simple heuristic policy:
+
+* pick up passenger if present
+* otherwise move toward highest-demand neighboring zone
+* 15% random exploration
+
+I want to upgrade this system into a **true reinforcement learning autonomous taxi dispatch system**.
+
+Your task is to redesign and implement the complete system while keeping my existing simulation and dashboard structure.
+
+---
+
+PROJECT GOALS
+
+Transform the system into a realistic **AI-powered taxi fleet management platform** with:
+
+1. trained RL dispatch agent
+2. improved city simulation
+3. multi-agent taxi system
+4. demand prediction model
+5. animated dashboard
+6. reinforcement learning metrics
+
+---
+
+TECH STACK
+
+Backend:
+Python
+FastAPI
+Gymnasium
+Stable-Baselines3
+PyTorch
+Pandas
+NumPy
+Scikit-learn
+
+Frontend:
+Next.js (React)
+Tailwind CSS
+React Leaflet
+Framer Motion
+Chart.js
+
+---
+
+SYSTEM ARCHITECTURE
+
+Frontend (Dashboard)
+↓
+FastAPI Backend
+↓
+City Simulator
+↓
+Demand Predictor
+↓
+RL Dispatcher (PPO)
+↓
+Taxi Fleet
+
+---
+
+CITY SIMULATION REQUIREMENTS
+
+Upgrade the city grid from **3×3 to 5×5 zones**.
+
+Each zone must contain:
+
+* zone_id
+* zone_name
+* passenger demand rate
+* traffic level
+* average trip distance
+
+Example zones:
+
+Downtown
+City Center
+Airport
+Business District
+Residential East
+Residential West
+
+Passenger demand must be generated using:
+
+Poisson distribution with zone-specific lambda values.
+
+Example:
+
+City Center λ = 6
+Airport λ = 5
+Residential λ = 2
+
+---
+
+TAXI SYSTEM
+
+Each taxi must have a full state:
+
+taxi_id
+current_zone
+status (idle / moving / occupied)
+destination_zone
+trip_time_remaining
+completed_trips
+
+When a taxi picks up a passenger:
+
+* assign random destination zone
+* compute trip duration based on distance
+* taxi becomes occupied until trip completes
+
+---
+
+REINFORCEMENT LEARNING ENVIRONMENT
+
+Create a Gymnasium environment.
+
+State representation must include:
+
+* passenger demand per zone (25 values)
+* taxi positions
+* zone traffic levels
+* time step
+
+Example state vector:
+
+[zone_demand_1 ... zone_demand_25,
+taxi_zone,
+traffic_levels]
+
+Action space:
+
+0 stay
+1 move north
+2 move south
+3 move east
+4 move west
+5 pick passenger
+
+Reward function:
+
++10 passenger pickup
++15 pickup in high-demand zone
+-2 empty movement
+-1 idle taxi
+-10 passenger waiting too long
+
+---
+
+RL TRAINING
+
+Use PPO algorithm from Stable-Baselines3.
+
+Training script must:
+
+* create TaxiEnv
+* train PPO model
+* run 100,000 timesteps
+* save trained model
+
+Example:
+
+model.save("taxi_dispatch_model")
+
+The model must be stored in:
+
+backend/models/
+
+Training must be done offline and not inside the API server.
+
+---
+
+DEMAND PREDICTION MODEL
+
+Implement a demand prediction module.
+
+Train a model using previous demand history to predict demand for next timestep.
+
+Use:
+
+RandomForestRegressor
+
+Input:
+
+previous passenger demand history
+
+Output:
+
+predicted demand per zone
+
+The RL agent should use predicted demand to decide movements.
+
+---
+
+FASTAPI BACKEND
+
+Create API endpoints:
+
+/simulate
+Runs one simulation step and returns:
+
+* taxi positions
+* zone demand
+* predicted demand
+* system metrics
+
+Response example:
+
+{
+taxis: [{id:1, zone:5, status:"idle"}],
+zones: [{id:1, demand:4}],
+metrics: {
+utilization: 0.75,
+avg_wait: 3.4,
+trips: 45,
+revenue: 620
+}
+}
+
+---
+
+FRONTEND DASHBOARD
+
+Upgrade the dashboard.
+
+Display:
+
+1. City demand heatmap
+2. Taxi markers moving between zones
+3. System metrics cards
+4. RL reward graph
+5. Taxi status table
+
+---
+
+MAP VISUALIZATION
+
+Use React Leaflet.
+
+Render:
+
+* taxi icons
+* zone heatmap colors based on demand
+
+---
+
+ANIMATIONS
+
+Use Framer Motion to animate taxis moving between zones.
+
+Instead of teleporting taxis:
+
+interpolate previous position → new position over 2 seconds.
+
+---
+
+REAL-TIME UPDATES
+
+Frontend must poll backend every **2 seconds**.
+
+Each poll updates:
+
+* taxi locations
+* passenger demand
+* metrics
+* charts
+
+---
+
+METRICS TO TRACK
+
+Taxi utilization rate
+Average passenger wait time
+Trips completed
+Revenue
+RL reward history
+
+Charts must be implemented using Chart.js.
+
+---
+
+PROJECT OUTPUT
+
+Generate the complete project with:
+
+1. backend Python code
+2. RL training script
+3. demand predictor
+4. city simulator
+5. FastAPI API
+6. Next.js frontend
+7. animated dashboard
+8. installation instructions
+9. run instructions
+
+The final system must allow a user to open the dashboard, start the simulation, see taxis moving live, view demand heatmaps, and observe reinforcement learning performance metrics.

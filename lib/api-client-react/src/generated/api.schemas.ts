@@ -3,14 +3,13 @@
  * Do not edit manually.
  * Api
  * Autonomous Taxi Fleet Management API
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 export interface HealthStatus {
   status: string;
 }
 
 export interface SimulationRequest {
-  /** Number of simulation steps to advance */
   steps?: number;
 }
 
@@ -18,11 +17,17 @@ export interface Zone {
   id: string;
   row: number;
   col: number;
-  /** Current passenger demand (Poisson lambda) */
+  /** Base demand lambda (Poisson) */
   demand: number;
+  /** Demand predicted by the EMA model for next step */
+  predictedDemand: number;
   waitingPassengers: number;
   taxiCount: number;
   name: string;
+  /** Traffic congestion level 0.0 to 1.0 */
+  trafficLevel: number;
+  /** Zone category (business, residential, transit, etc.) */
+  category: string;
 }
 
 export type TaxiStatus = (typeof TaxiStatus)[keyof typeof TaxiStatus];
@@ -41,16 +46,21 @@ export interface Taxi {
   tripsCompleted: number;
   revenue: number;
   lastAction: string;
+  /** Name of the destination zone when carrying a passenger */
+  destinationZone?: string | null;
+  /** Steps remaining until trip completes */
+  tripTimeRemaining?: number | null;
 }
 
 export interface SimulationMetrics {
   totalTripsCompleted: number;
   totalRevenue: number;
   averageWaitTime: number;
-  /** Percentage of taxis actively carrying passengers */
   utilizationRate: number;
   totalReward: number;
   timeStep: number;
+  /** Cumulative reward for the current 50-step episode */
+  episodeReward: number;
 }
 
 export interface HistoryPoint {
@@ -60,6 +70,7 @@ export interface HistoryPoint {
   utilizationRate: number;
   waitTime: number;
   reward: number;
+  episodeReward: number;
 }
 
 export interface SimulationState {
