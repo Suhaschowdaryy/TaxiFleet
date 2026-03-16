@@ -1,7 +1,7 @@
 import {
   ResponsiveContainer,
-  LineChart,
-  Line,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -23,23 +23,35 @@ export function MetricsChart({ data }: MetricsChartProps) {
 
   if (data.length === 0) {
     return (
-      <div className="h-full w-full flex items-center justify-center text-muted-foreground text-sm">
-        No simulation data yet
+      <div className="h-full w-full flex items-center justify-center text-muted-foreground text-sm border border-dashed border-border rounded-lg bg-background/50">
+        No simulation data yet. Start the fleet to gather metrics.
       </div>
     );
   }
 
   return (
-    <div className="h-full w-full min-h-[250px]">
+    <div className="h-full w-full min-h-[300px]">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={displayData} margin={{ top: 10, right: 30, left: 10, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+        <AreaChart data={displayData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id="colorUtil" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
+              <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
+            </linearGradient>
+            <linearGradient id="colorTrips" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="hsl(var(--accent))" stopOpacity={0.3}/>
+              <stop offset="95%" stopColor="hsl(var(--accent))" stopOpacity={0}/>
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} opacity={0.5} />
           <XAxis 
             dataKey="timeStep" 
             stroke="hsl(var(--muted-foreground))" 
             fontSize={12}
             tickLine={false}
             axisLine={false}
+            tickMargin={10}
+            minTickGap={20}
           />
           <YAxis 
             yAxisId="left" 
@@ -48,6 +60,7 @@ export function MetricsChart({ data }: MetricsChartProps) {
             tickLine={false}
             axisLine={false}
             tickFormatter={(value) => `${value}%`}
+            tickMargin={10}
           />
           <YAxis 
             yAxisId="right" 
@@ -56,39 +69,46 @@ export function MetricsChart({ data }: MetricsChartProps) {
             fontSize={12}
             tickLine={false}
             axisLine={false}
+            tickMargin={10}
           />
           <Tooltip
             contentStyle={{ 
               backgroundColor: 'hsl(var(--popover))',
               borderColor: 'hsl(var(--border))',
               borderRadius: '8px',
-              boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+              boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.3)',
+              fontFamily: 'var(--font-sans)',
+              padding: '12px'
             }}
-            itemStyle={{ color: 'hsl(var(--foreground))' }}
-            labelStyle={{ color: 'hsl(var(--muted-foreground))', marginBottom: '4px' }}
+            itemStyle={{ color: 'hsl(var(--foreground))', fontWeight: 500, paddingTop: '4px' }}
+            labelStyle={{ color: 'hsl(var(--muted-foreground))', marginBottom: '8px', fontSize: '12px', borderBottom: '1px solid hsl(var(--border))', paddingBottom: '4px' }}
           />
-          <Legend wrapperStyle={{ paddingTop: '20px', fontSize: '12px' }} />
-          <Line 
+          <Legend wrapperStyle={{ paddingTop: '20px', fontSize: '12px', opacity: 0.8 }} iconType="circle" />
+          <Area 
             yAxisId="left"
             type="monotone" 
             dataKey="utilizationRateRaw" 
             name="Utilization (%)"
             stroke="hsl(var(--primary))" 
+            fillOpacity={1} 
+            fill="url(#colorUtil)"
             strokeWidth={3}
             dot={false}
-            activeDot={{ r: 6, fill: "hsl(var(--primary))", strokeWidth: 0 }}
+            activeDot={{ r: 6, fill: "hsl(var(--primary))", strokeWidth: 2, stroke: "hsl(var(--background))" }}
           />
-          <Line 
+          <Area 
             yAxisId="right"
             type="monotone" 
             dataKey="tripsCompleted" 
             name="Trips Completed"
-            stroke="#a855f7" // Purple accent
+            stroke="hsl(var(--accent))" 
+            fillOpacity={1} 
+            fill="url(#colorTrips)"
             strokeWidth={3}
             dot={false}
-            activeDot={{ r: 6, fill: "#a855f7", strokeWidth: 0 }}
+            activeDot={{ r: 6, fill: "hsl(var(--accent))", strokeWidth: 2, stroke: "hsl(var(--background))" }}
           />
-        </LineChart>
+        </AreaChart>
       </ResponsiveContainer>
     </div>
   );

@@ -46,37 +46,43 @@
 
 :root {
   /* Dark mode by default for the dashboard */
-  --background: 222 47% 8%;
-  --foreground: 210 40% 98%;
+  --background: 220 25% 8%;
+  --foreground: 210 20% 95%;
   
-  --card: 222 47% 11%;
-  --card-foreground: 210 40% 98%;
-  --card-border: 217 33% 17%;
+  --card: 220 20% 12%;
+  --card-foreground: 210 20% 95%;
+  --card-border: 220 15% 20%;
   
-  --popover: 222 47% 11%;
-  --popover-foreground: 210 40% 98%;
-  --popover-border: 217 33% 17%;
+  --popover: 220 20% 12%;
+  --popover-foreground: 210 20% 95%;
+  --popover-border: 220 15% 20%;
   
-  --primary: 199 89% 48%;
-  --primary-foreground: 222 47% 11%;
+  --primary: 185 85% 50%;
+  --primary-foreground: 220 25% 8%;
   
-  --secondary: 217 33% 17%;
-  --secondary-foreground: 210 40% 98%;
+  --secondary: 220 15% 16%;
+  --secondary-foreground: 210 15% 75%;
   
-  --muted: 217 33% 17%;
-  --muted-foreground: 215 20% 65%;
+  --muted: 220 12% 14%;
+  --muted-foreground: 215 15% 55%;
   
-  --accent: 199 89% 48%;
-  --accent-foreground: 222 47% 11%;
+  --accent: 250 80% 65%;
+  --accent-foreground: 0 0% 100%;
   
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 210 40% 98%;
+  --destructive: 0 85% 60%;
+  --destructive-foreground: 0 0% 100%;
 
-  --border: 217 33% 17%;
-  --input: 217 33% 17%;
-  --ring: 199 89% 48%;
+  --border: 220 15% 18%;
+  --input: 220 15% 22%;
+  --ring: 185 85% 50%;
   
   --radius: 0.75rem;
+
+  --chart-1: 185 85% 50%;
+  --chart-2: 250 80% 65%;
+  --chart-3: 150 80% 50%;
+  --chart-4: 35 90% 55%;
+  --chart-5: 340 85% 60%;
 }
 
 @layer base {
