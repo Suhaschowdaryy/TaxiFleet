@@ -1,15 +1,16 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Autonomous Taxi Fleet Management API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: simulation
+    description: Taxi fleet simulation
 paths:
   /healthz:
     get:
@@ -24,6 +25,49 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /simulate:
+    post:
+      operationId: runSimulation
+      tags: [simulation]
+      summary: Run taxi simulation step
+      description: Advances the simulation and returns current state
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SimulationRequest"
+      responses:
+        "200":
+          description: Simulation state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SimulationState"
+  /simulate/reset:
+    post:
+      operationId: resetSimulation
+      tags: [simulation]
+      summary: Reset the simulation to initial state
+      responses:
+        "200":
+          description: Reset successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SimulationState"
+  /simulate/state:
+    get:
+      operationId: getSimulationState
+      tags: [simulation]
+      summary: Get current simulation state
+      responses:
+        "200":
+          description: Current simulation state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SimulationState"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +77,135 @@ components:
           type: string
       required:
         - status
-
+    SimulationRequest:
+      type: object
+      properties:
+        steps:
+          type: integer
+          description: Number of simulation steps to advance
+          default: 1
+    Zone:
+      type: object
+      properties:
+        id:
+          type: string
+        row:
+          type: integer
+        col:
+          type: integer
+        demand:
+          type: number
+          description: Current passenger demand (Poisson lambda)
+        waitingPassengers:
+          type: integer
+        taxiCount:
+          type: integer
+        name:
+          type: string
+      required:
+        - id
+        - row
+        - col
+        - demand
+        - waitingPassengers
+        - taxiCount
+        - name
+    Taxi:
+      type: object
+      properties:
+        id:
+          type: string
+        row:
+          type: integer
+        col:
+          type: integer
+        status:
+          type: string
+          enum: [idle, carrying_passenger, moving_to_pickup]
+        tripsCompleted:
+          type: integer
+        revenue:
+          type: number
+        lastAction:
+          type: string
+      required:
+        - id
+        - row
+        - col
+        - status
+        - tripsCompleted
+        - revenue
+        - lastAction
+    SimulationMetrics:
+      type: object
+      properties:
+        totalTripsCompleted:
+          type: integer
+        totalRevenue:
+          type: number
+        averageWaitTime:
+          type: number
+        utilizationRate:
+          type: number
+          description: Percentage of taxis actively carrying passengers
+        totalReward:
+          type: number
+        timeStep:
+          type: integer
+      required:
+        - totalTripsCompleted
+        - totalRevenue
+        - averageWaitTime
+        - utilizationRate
+        - totalReward
+        - timeStep
+    HistoryPoint:
+      type: object
+      properties:
+        timeStep:
+          type: integer
+        tripsCompleted:
+          type: integer
+        revenue:
+          type: number
+        utilizationRate:
+          type: number
+        waitTime:
+          type: number
+        reward:
+          type: number
+      required:
+        - timeStep
+        - tripsCompleted
+        - revenue
+        - utilizationRate
+        - waitTime
+        - reward
+    SimulationState:
+      type: object
+      properties:
+        taxis:
+          type: array
+          items:
+            $ref: "#/components/schemas/Taxi"
+        zones:
+          type: array
+          items:
+            $ref: "#/components/schemas/Zone"
+        metrics:
+          $ref: "#/components/schemas/SimulationMetrics"
+        history:
+          type: array
+          items:
+            $ref: "#/components/schemas/HistoryPoint"
+        gridSize:
+          type: integer
+        running:
+          type: boolean
+      required:
+        - taxis
+        - zones
+        - metrics
+        - history
+        - gridSize
+        - running

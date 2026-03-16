@@ -1,0 +1,178 @@
+You are a senior AI engineer and full-stack developer. Build a complete end-to-end project called Autonomous Taxi Fleet Management using Reinforcement Learning.
+The project must include:
+
+Reinforcement Learning taxi dispatch system
+Multi-agent taxi simulation
+Real taxi dataset processing
+Backend API for RL inference
+Interactive web dashboard
+Live city simulation visualization
+
+The entire project must be fully runnable with clear folder structure, installation instructions, and complete code.
+
+PROJECT REQUIREMENTS
+Use the following technologies:
+Backend
+Python
+FastAPI
+Stable-Baselines3
+Gymnasium
+PyTorch
+Pandas
+NumPy
+Frontend
+Next.js (React)
+Tailwind CSS
+React Leaflet (map visualization)
+Chart.js
+Simulation
+City grid simulator
+Passenger demand generator
+Taxi fleet controller
+Deployment ready structure.
+
+PROJECT STRUCTURE
+Create the following structure:
+taxi-fleet-rl
+│
+├── backend
+│   ├── env
+│   │   └── taxi_env.py
+│   ├── simulation
+│   │   └── city_simulator.py
+│   ├── agents
+│   │   └── rl_dispatcher.py
+│   ├── model
+│   │   └── trained_model.zip
+│   ├── api.py
+│   ├── train.py
+│   └── requirements.txt
+│
+├── frontend
+│   ├── pages
+│   │   └── index.js
+│   ├── components
+│   │   ├── TaxiMap.js
+│   │   └── MetricsDashboard.js
+│   ├── styles
+│   └── package.json
+│
+└── README.md
+
+STEP 1
+Provide commands to install all dependencies.
+Backend dependencies must include:
+pip install fastapi
+pip install uvicorn
+pip install pandas
+pip install numpy
+pip install gymnasium
+pip install stable-baselines3
+pip install torch
+pip install matplotlib
+Frontend dependencies:
+npx create-next-app frontend
+npm install react-leaflet leaflet
+npm install chart.js react-chartjs-2
+npm install tailwindcss
+
+STEP 2
+Create a City Simulator.
+The simulator must:
+• generate passenger demand using Poisson distribution
+• simulate taxi positions on a grid city
+• track taxi movement
+• track passenger pickups
+City size should be configurable.
+Example grid:
+Z1 Z2 Z3
+Z4 Z5 Z6
+Z7 Z8 Z9
+Each zone should store demand and taxi count.
+
+STEP 3
+Create a Gym RL Environment.
+State should include:
+• passenger demand map
+• taxi positions
+• time step
+Action space:
+• move north
+• move south
+• move east
+• move west
+• pick passenger
+Reward design:
++10 passenger served
++5 high demand zone served
+-1 idle movement
+-10 passenger waiting too long
+Environment must follow Gymnasium API.
+
+STEP 4
+Create a Reinforcement Learning Agent.
+Use PPO from Stable-Baselines3.
+Training script must:
+• initialize TaxiEnv
+• train PPO agent
+• run 50k timesteps
+• save trained model
+Provide training visualization graphs.
+
+STEP 5
+Create FastAPI backend server.
+Endpoints:
+/train
+Starts RL training.
+/simulate
+Runs taxi simulation and returns:
+• taxi positions
+• passenger demand map
+• rewards
+Response must be JSON.
+
+STEP 6
+Build Next.js frontend dashboard.
+The frontend must include:
+Home page with title:
+Autonomous Taxi Fleet Management System
+Buttons:
+Start Simulation
+Run RL Model
+Map visualization:
+Use React Leaflet to display taxis moving on a map.
+Show markers for taxi locations.
+
+STEP 7
+Create Metrics Dashboard.
+Display:
+Taxi utilization rate
+Average passenger waiting time
+Trips completed
+Revenue estimate
+Use Chart.js graphs.
+
+STEP 8
+Add live simulation updates.
+Frontend must request backend every 2 seconds to update taxi positions.
+Taxi markers should animate moving between zones.
+
+STEP 9
+Provide commands to run the system.
+Backend:
+cd backend
+uvicorn api:app --reload
+Frontend:
+cd frontend
+npm run dev
+Open browser at:
+http://localhost:3000
+
+STEP 10
+Provide README with:
+• setup instructions
+• system architecture diagram
+• explanation of RL state, action, reward design
+• instructions for training model
+• screenshots of dashboard
+The final system must allow a user to open the website, start simulation, see taxis moving on a map, and view RL metrics in real time.

@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Autonomous Taxi Fleet Management"
+version = "1.0.0"
+id = "artifacts/taxi-fleet"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+localPort = 18150
+name = "web"
+paths = ["/"]
+
+[services.development]
+run = "pnpm --filter @workspace/taxi-fleet run dev"
+
+[services.env]
+PORT = "18150"
+BASE_PATH = "/"
+
+[services.production]
+build = ["pnpm", "--filter", "@workspace/taxi-fleet", "run", "build"]
+publicDir = "artifacts/taxi-fleet/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"

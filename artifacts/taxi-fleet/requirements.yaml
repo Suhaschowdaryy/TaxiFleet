@@ -1,0 +1,12 @@
+packages:
+  "framer-motion": "For animating taxi markers moving smoothly between zones"
+  "recharts": "For the metrics history line charts"
+  "clsx": "Utility for conditionally joining classNames"
+  "tailwind-merge": "Utility for merging tailwind classes without style conflicts"
+  "lucide-react": "For crisp dashboard icons"
+
+images: []
+
+notes:
+  - "The frontend relies on the auto-generated hooks from @workspace/api-client-react"
+  - "Simulation is stepped by the frontend calling POST /api/simulate periodically when 'running' state is toggled"
