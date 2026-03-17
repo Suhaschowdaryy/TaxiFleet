@@ -303,20 +303,11 @@ class RLDispatcher {
     debugMode: boolean
   ): { row: number; col: number; action: string; debug: TaxiDebugInfo } {
     const sv = stateVec(taxi.row, taxi.col, zones, taxi.status === "carrying_passenger");
-    const currentZone = zones[zi(taxi.row, taxi.col)];
 
-    // Pickup if passengers waiting
-    if (currentZone.waitingPassengers > 0) {
-      const qv = this.getQ(sv, "stay");
-      return {
-        row: taxi.row, col: taxi.col, action: "pickup",
-        debug: { chosenAction: "pickup", qValue: qv, demandScore: currentZone.waitingPassengers, rebalancingScore: 0, stateKey: stateKey(sv) },
-      };
-    }
-
-    // Build candidates: stay + neighbors
+    // Build candidates: stay + pickup (same cell) + neighbors
     const candidates: { row: number; col: number; action: ActionKey }[] = [
-      { row: taxi.row, col: taxi.col, action: "stay" },
+      { row: taxi.row, col: taxi.col, action: "stay"   },
+      { row: taxi.row, col: taxi.col, action: "pickup" },
       ...neighbors(taxi.row, taxi.col),
     ];
 
@@ -325,18 +316,26 @@ class RLDispatcher {
       const z = zones[zi(c.row, c.col)];
       const supply = targetCounts.get(zi(c.row, c.col)) ?? 0;
 
+      // Pickup-specific bonus/penalty based on real-time queue length
+      let actionScore = 0;
+      if (c.action === "pickup") {
+        actionScore = z.waitingPassengers > 0
+          ? 10 + z.waitingPassengers * 2   // reward picking up when passengers present
+          : -5;                             // penalise attempting pickup with empty queue
+      }
+
       // Multi-agent coordination: penalise overcrowded zones
       const crowdPenalty = supply > 3 ? -5 * (supply - 2) : 0;
 
       // Supply-demand rebalancing score
       const rebalScore = 0.6 * z.predictedDemand - 0.3 * supply + crowdPenalty;
 
-      // Q-value
+      // Q-value for this (state, action) pair
       const destSv = stateVec(c.row, c.col, zones, false);
       const qv = this.getQ(destSv, c.action);
 
       const domainScore = z.predictedDemand * (1 + 0.3 * z.trafficLevel) + z.waitingPassengers * 2;
-      const totalScore = domainScore + qv * 0.4 + rebalScore;
+      const totalScore = domainScore + qv * 0.4 + rebalScore + actionScore;
 
       return { ...c, totalScore, qv, domainScore, rebalScore };
     });

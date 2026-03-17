@@ -1,0 +1,153 @@
+You are modifying an existing TypeScript RL taxi fleet simulator.
+
+The system already includes:
+
+• Q-learning with replay buffer
+• demand prediction (EMA)
+• reward shaping
+• multi-agent coordination
+• pickup action added to ActionKey
+• dashboard + analytics
+
+Currently, pickup is **hardcoded (forced)**:
+
+```ts
+if (currentZone.waitingPassengers > 0) {
+  return { action: "pickup" }
+}
+```
+
+This is incorrect because the RL agent is not learning **when to pick up vs move**.
+
+Your task is to convert pickup into a **decision-based action**, fully controlled by the RL policy.
+
+---
+
+SECTION 1 — REMOVE FORCED PICKUP LOGIC
+
+Locate this block in dispatcher:
+
+```ts
+if (currentZone.waitingPassengers > 0) {
+  return {
+    row: taxi.row,
+    col: taxi.col,
+    action: "pickup",
+    ...
+  };
+}
+```
+
+❌ Completely REMOVE this early return.
+
+Pickup must NOT be forced.
+
+---
+
+SECTION 2 — ADD PICKUP TO CANDIDATE ACTIONS
+
+Find candidate generation:
+
+```ts
+const candidates = [
+  { row: taxi.row, col: taxi.col, action: "stay" },
+  ...neighbors(...)
+];
+```
+
+Replace with:
+
+```ts
+const candidates = [
+  { row: taxi.row, col: taxi.col, action: "stay" },
+  { row: taxi.row, col: taxi.col, action: "pickup" },
+  ...neighbors(taxi.row, taxi.col)
+];
+```
+
+---
+
+SECTION 3 — SCORE PICKUP ACTION
+
+Inside scoring loop, add logic for pickup:
+
+```ts
+const scored = candidates.map(c => {
+  const z = zones[zi(c.row, c.col)];
+  const supply = targetCounts.get(zi(c.row, c.col)) ?? 0;
+
+  let actionScore = 0;
+
+  if (c.action === "pickup") {
+    if (z.waitingPassengers > 0) {
+      actionScore = 10 + z.waitingPassengers * 2;
+    } else {
+      actionScore = -5;
+    }
+  }
+
+  // existing scoring logic
+  const crowdPenalty = supply > 3 ? -5 * (supply - 2) : 0;
+  const rebalScore = 0.6 * z.predictedDemand - 0.3 * supply + crowdPenalty;
+
+  const destSv = stateVec(c.row, c.col, zones, false);
+  const qv = this.getQ(destSv, c.action);
+
+  const domainScore =
+    z.predictedDemand * (1 + 0.3 * z.trafficLevel) +
+    z.waitingPassengers * 2;
+
+  const totalScore = domainScore + qv * 0.4 + rebalScore + actionScore;
+
+  return { ...c, totalScore, qv, domainScore, rebalScore };
+});
+```
+
+---
+
+SECTION 4 — ENSURE LEARNING HANDLES PICKUP
+
+Your learning logic already supports:
+
+```ts
+action: "pickup"
+```
+
+Do NOT change learning logic further.
+
+---
+
+SECTION 5 — VALIDATION CONDITIONS
+
+After changes, ensure:
+
+• taxis no longer instantly pick up upon arrival
+• taxis sometimes move even when passengers exist
+• taxis learn when pickup is optimal vs repositioning
+• Q-values for "pickup" evolve separately from "stay"
+
+---
+
+SECTION 6 — EXPECTED BEHAVIOR
+
+After ~10–20 episodes:
+
+• taxis will delay pickup if nearby zones have higher demand
+• taxis will prioritize crowded zones
+• pickup becomes a strategic decision, not automatic
+
+---
+
+IMPORTANT
+
+Do NOT modify:
+
+• replay buffer
+• epsilon-greedy logic
+• UI / dashboard
+• reward shaping logic
+• environment structure
+
+Only change how pickup is selected.
+
+Ensure TypeScript compiles and simulation runs correctly.
