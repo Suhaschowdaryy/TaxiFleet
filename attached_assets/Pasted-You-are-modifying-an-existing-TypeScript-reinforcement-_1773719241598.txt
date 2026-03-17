@@ -1,0 +1,138 @@
+You are modifying an existing TypeScript reinforcement learning taxi fleet simulator.
+
+The system already includes:
+
+• 5×5 city grid (25 zones)
+• Q-learning dispatcher with replay buffer
+• demand prediction (EMA)
+• multi-agent taxi coordination
+• RL analytics dashboard
+• 12 taxis and passenger demand generation
+
+The simulation currently has a problem: **episode rewards collapse to around −15000 because penalties are too large and rewards are too sparse.**
+
+Your task is to **stabilize learning by adjusting reward scaling and adding reward shaping**.
+
+Do NOT change UI components or architecture. Only modify the simulation logic.
+
+---
+
+SECTION 1 — FIX OVERCROWDING PENALTY
+
+Locate the current overcrowding penalty block:
+
+```ts
+const totalWaiting = s.zones.reduce((sum, z) => sum + z.waitingPassengers, 0);
+if (totalWaiting > 10) stepReward -= Math.floor(totalWaiting / 10) * 10;
+```
+
+Replace it with a softer penalty:
+
+```ts
+const totalWaiting = s.zones.reduce((sum, z) => sum + z.waitingPassengers, 0);
+
+// scale penalty smoothly instead of huge spikes
+stepReward -= totalWaiting * 0.2;
+```
+
+This prevents extremely large negative episode rewards.
+
+---
+
+SECTION 2 — LIMIT PASSENGER ACCUMULATION
+
+Find the passenger generation line:
+
+```ts
+zone.waitingPassengers = Math.min(zone.waitingPassengers + newPass, 15);
+```
+
+Change the cap from 15 → 8:
+
+```ts
+zone.waitingPassengers = Math.min(zone.waitingPassengers + newPass, 8);
+```
+
+This prevents runaway passenger queues that create huge penalties.
+
+---
+
+SECTION 3 — REDUCE MOVEMENT PENALTIES
+
+Locate the current movement reward logic:
+
+```ts
+const moveReward = moved ? (newZ.predictedDemand > 2 ? 1 : -2) : -1;
+stepReward += moveReward;
+```
+
+Replace it with a **distance-to-demand reward shaping system**.
+
+---
+
+SECTION 4 — ADD DEMAND SCORE HELPER
+
+Add this helper function above the movement logic:
+
+```ts
+function demandScore(zone: Zone) {
+  return zone.waitingPassengers + zone.predictedDemand * 0.7;
+}
+```
+
+---
+
+SECTION 5 — IMPLEMENT REWARD SHAPING
+
+Replace the old movement reward logic with:
+
+```ts
+const oldZone = s.zones[zi(oldRow, oldCol)];
+const newZone = s.zones[zi(taxi.row, taxi.col)];
+
+const oldScore = demandScore(oldZone);
+const newScore = demandScore(newZone);
+
+let moveReward = 0;
+
+if (moved) {
+  if (newScore > oldScore) {
+    moveReward = 2;      // moving toward higher demand
+  } else {
+    moveReward = -1;     // moving away from demand
+  }
+} else {
+  moveReward = -0.2;    // idle penalty
+}
+
+stepReward += moveReward;
+```
+
+This creates **dense rewards**, allowing the RL agent to learn faster.
+
+---
+
+SECTION 6 — EXPECTED BEHAVIOR AFTER CHANGES
+
+After these changes:
+
+• Episode rewards should no longer collapse to −15000
+• Early episodes may be around −200 to −500
+• Over time rewards should increase toward positive values
+• Taxis should gradually learn to move toward high-demand zones before pickups occur
+
+---
+
+SECTION 7 — DO NOT CHANGE
+
+Do NOT modify:
+
+• replay buffer logic
+• Q-learning update rule
+• epsilon exploration logic
+• dashboard analytics
+• taxi dispatch structure
+
+Only update reward scaling and movement reward shaping.
+
+Ensure the simulator still compiles and runs without breaking the existing UI.

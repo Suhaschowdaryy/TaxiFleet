@@ -434,6 +434,10 @@ export function createSimulation(): SimulationState {
   };
 }
 
+function demandScore(zone: Zone): number {
+  return zone.waitingPassengers + zone.predictedDemand * 0.7;
+}
+
 export function stepSimulation(state: SimulationState, steps = 1): SimulationState {
   let s: SimulationState = {
     ...state,
@@ -458,7 +462,7 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
       const lambdaMod = zone.demand * (0.7 + 0.6 * Math.random()) * (1 + 0.3 * zone.trafficLevel);
       const newPass = poissonSample(lambdaMod);
       const before = zone.waitingPassengers;
-      zone.waitingPassengers = Math.min(zone.waitingPassengers + newPass, 15);
+      zone.waitingPassengers = Math.min(zone.waitingPassengers + newPass, 8);
       totalPredError += predictor.accuracy(zone.id, zone.waitingPassengers);
       predictor.record(zone.id, zone.waitingPassengers);
     }
@@ -548,8 +552,17 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
         }
 
         const moved = oldRow !== taxi.row || oldCol !== taxi.col;
-        const newZ = s.zones[zi(taxi.row, taxi.col)];
-        const moveReward = moved ? (newZ.predictedDemand > 2 ? 1 : -2) : -1;
+        const oldZone = s.zones[zi(oldRow, oldCol)];
+        const newZone = s.zones[zi(taxi.row, taxi.col)];
+        const oldScore = demandScore(oldZone);
+        const newScore = demandScore(newZone);
+
+        let moveReward = 0;
+        if (moved) {
+          moveReward = newScore > oldScore ? 2 : -1;  // toward demand = +2, away = -1
+        } else {
+          moveReward = -0.2;  // soft idle penalty
+        }
         stepReward += moveReward;
 
         const nextSv = stateVec(taxi.row, taxi.col, s.zones, false);
@@ -557,9 +570,9 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
       }
     }
 
-    // --- 5. Overcrowding penalty ---
+    // --- 5. Overcrowding penalty (smooth, not spiked) ---
     const totalWaiting = s.zones.reduce((sum, z) => sum + z.waitingPassengers, 0);
-    if (totalWaiting > 10) stepReward -= Math.floor(totalWaiting / 10) * 10;
+    stepReward -= totalWaiting * 0.2;
 
     // --- 6. Episode end: decay epsilon, reset queues ---
     if (isEpisodeEnd) {
