@@ -229,7 +229,7 @@ class ReplayBuffer {
 }
 
 // ─── Q-Learning Dispatcher with Experience Replay ─────────────────────────────
-type ActionKey = "stay" | "north" | "south" | "west" | "east";
+type ActionKey = "stay" | "north" | "south" | "west" | "east" | "pickup";
 
 function discretize(val: number, thresholds: number[]): number {
   for (let i = 0; i < thresholds.length; i++) if (val < thresholds[i]) return i;
@@ -286,7 +286,7 @@ class RLDispatcher {
       this.stepsSinceReplay = 0;
       const batch = this.replayBuf.sample(BATCH_SIZE);
       for (const { state, action, reward, nextState } of batch) {
-        const allActions: ActionKey[] = ["stay", "north", "south", "west", "east"];
+        const allActions: ActionKey[] = ["stay", "north", "south", "west", "east", "pickup"];
         const bestNext = Math.max(...allActions.map(a => this.getQ(nextState, a)));
         const current = this.getQ(state, action);
         const updated = current + ALPHA * (reward + GAMMA * bestNext - current);
@@ -504,7 +504,7 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
 
           // Learn from delivery
           const sv = stateVec(taxi.row, taxi.col, s.zones, false);
-          dispatcher.learn({ state: sv, action: "stay", reward: 10, nextState: sv });
+          dispatcher.learn({ state: sv, action: "pickup", reward: 10, nextState: sv });
         }
         continue;
       }
@@ -527,15 +527,15 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
           taxi.destinationZone = destDef.name;
           taxi.tripTimeRemaining = duration;
           taxi.lastAction = "picked_up_passenger";
-          const reward = z.demand >= 4 ? 15 : 10;
+          const reward = z.waitingPassengers >= 3 ? 15 : 10;
           stepReward += reward;
 
           const nextSv = stateVec(taxi.row, taxi.col, s.zones, true);
-          dispatcher.learn({ state: prevSv, action: "stay", reward, nextState: nextSv });
+          dispatcher.learn({ state: prevSv, action: "pickup", reward, nextState: nextSv });
         } else {
           taxi.lastAction = "wait_no_passengers";
           stepReward -= 1;
-          dispatcher.learn({ state: prevSv, action: "stay", reward: -1, nextState: prevSv });
+          dispatcher.learn({ state: prevSv, action: "pickup", reward: -1, nextState: prevSv });
         }
       } else {
         const oldRow = taxi.row, oldCol = taxi.col;
@@ -557,12 +557,9 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
         const oldScore = demandScore(oldZone);
         const newScore = demandScore(newZone);
 
-        let moveReward = 0;
-        if (moved) {
-          moveReward = newScore > oldScore ? 2 : -1;  // toward demand = +2, away = -1
-        } else {
-          moveReward = -0.2;  // soft idle penalty
-        }
+        const delta = newScore - oldScore;
+        let moveReward = moved ? delta * 0.5 : -0.2;
+        moveReward = Math.max(-2, Math.min(3, moveReward));
         stepReward += moveReward;
 
         const nextSv = stateVec(taxi.row, taxi.col, s.zones, false);

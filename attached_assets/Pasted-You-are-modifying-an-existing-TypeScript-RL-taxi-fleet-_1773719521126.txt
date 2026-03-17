@@ -1,0 +1,167 @@
+You are modifying an existing TypeScript RL taxi fleet simulator.
+
+The system already works and includes:
+
+• Q-learning with replay buffer
+• demand prediction (EMA)
+• reward shaping (movement-based)
+• multi-agent dispatch
+• dashboard analytics
+
+Your task is to apply **three targeted fixes** to improve learning correctness and stability.
+
+Do NOT change UI, architecture, or unrelated logic.
+
+---
+
+SECTION 1 — FIX PICKUP REWARD SIGNAL
+
+Current code uses base demand (lambda):
+
+```ts
+const reward = z.demand >= 4 ? 15 : 10;
+```
+
+This is incorrect because it uses static zone configuration instead of real-time state.
+
+Replace it with:
+
+```ts
+const reward = z.waitingPassengers >= 3 ? 15 : 10;
+```
+
+This ensures reward reflects **actual congestion**, not predefined zone type.
+
+---
+
+SECTION 2 — FIX ACTION LABELING (CRITICAL)
+
+Currently, pickup and delivery learning use:
+
+```ts
+action: "stay"
+```
+
+This is incorrect and causes **learning leakage**, where the agent thinks "stay" is a good action.
+
+---
+
+Step 2.1 — Add new action type
+
+Extend the action type definition:
+
+```ts
+type ActionKey = "stay" | "north" | "south" | "west" | "east" | "pickup";
+```
+
+---
+
+Step 2.2 — Update learning calls
+
+Replace all pickup-related learning calls:
+
+```ts
+dispatcher.learn({
+  state: prevSv,
+  action: "stay",
+  reward,
+  nextState: nextSv
+});
+```
+
+With:
+
+```ts
+dispatcher.learn({
+  state: prevSv,
+  action: "pickup",
+  reward,
+  nextState: nextSv
+});
+```
+
+Also update delivery learning:
+
+```ts
+dispatcher.learn({
+  state: sv,
+  action: "pickup",
+  reward: 10,
+  nextState: sv
+});
+```
+
+---
+
+Step 2.3 — Ensure Q-table supports new action
+
+Wherever actions are enumerated, include "pickup":
+
+```ts
+const allActions: ActionKey[] = ["stay", "north", "south", "west", "east", "pickup"];
+```
+
+---
+
+SECTION 3 — IMPROVE REWARD SHAPING (PROPORTIONAL)
+
+Current shaping:
+
+```ts
+if (newScore > oldScore) moveReward = 2;
+else moveReward = -1;
+```
+
+Replace with proportional reward:
+
+```ts
+const delta = newScore - oldScore;
+
+let moveReward = 0;
+
+if (moved) {
+  moveReward = delta * 0.5;
+} else {
+  moveReward = -0.2;
+}
+```
+
+Optional: clamp to avoid extremes:
+
+```ts
+moveReward = Math.max(-2, Math.min(3, moveReward));
+```
+
+Then:
+
+```ts
+stepReward += moveReward;
+```
+
+---
+
+SECTION 4 — EXPECTED IMPROVEMENTS
+
+After these changes:
+
+• RL no longer confuses "stay" with pickup
+• Q-values become more meaningful
+• taxis learn better movement gradients
+• episode reward stabilizes and improves faster
+• agent reacts to real-time congestion instead of static zones
+
+---
+
+SECTION 5 — DO NOT MODIFY
+
+Do NOT change:
+
+• replay buffer
+• epsilon decay
+• UI / dashboard
+• demand generation
+• dispatch logic structure
+
+Only apply the above corrections.
+
+Ensure TypeScript compiles without errors and simulation runs normally.
