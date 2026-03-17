@@ -330,9 +330,8 @@ class RLDispatcher {
       // Supply-demand rebalancing score
       const rebalScore = 0.6 * z.predictedDemand - 0.3 * supply + crowdPenalty;
 
-      // Q-value for this (state, action) pair
-      const destSv = stateVec(c.row, c.col, zones, false);
-      const qv = this.getQ(destSv, c.action);
+      // Q(s, a): always query the CURRENT state sv, not the destination state
+      const qv = this.getQ(sv, c.action);
 
       const domainScore = z.predictedDemand * (1 + 0.3 * z.trafficLevel) + z.waitingPassengers * 2;
       const totalScore = domainScore + qv * 0.4 + rebalScore + actionScore;
@@ -460,7 +459,6 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
     for (const zone of s.zones) {
       const lambdaMod = zone.demand * (0.7 + 0.6 * Math.random()) * (1 + 0.3 * zone.trafficLevel);
       const newPass = poissonSample(lambdaMod);
-      const before = zone.waitingPassengers;
       zone.waitingPassengers = Math.min(zone.waitingPassengers + newPass, 8);
       totalPredError += predictor.accuracy(zone.id, zone.waitingPassengers);
       predictor.record(zone.id, zone.waitingPassengers);
@@ -500,10 +498,8 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
           taxi.tripTimeRemaining = null;
           taxi.lastAction = "delivered_passenger";
           stepReward += 10;
-
-          // Learn from delivery
-          const sv = stateVec(taxi.row, taxi.col, s.zones, false);
-          dispatcher.learn({ state: sv, action: "pickup", reward: 10, nextState: sv });
+          // No Q-update on delivery — the reward for this trip was already
+          // credited to the "pickup" action at the time the passenger was picked up.
         }
         continue;
       }
@@ -517,6 +513,7 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
       if (dispatch.action === "pickup") {
         const z = s.zones[zi(taxi.row, taxi.col)];
         if (z.waitingPassengers > 0) {
+          const queueBefore = z.waitingPassengers;   // capture before decrement
           z.waitingPassengers--;
           const destRow = Math.floor(Math.random() * GRID_SIZE);
           const destCol = Math.floor(Math.random() * GRID_SIZE);
@@ -526,10 +523,11 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
           taxi.destinationZone = destDef.name;
           taxi.tripTimeRemaining = duration;
           taxi.lastAction = "picked_up_passenger";
-          const reward = z.waitingPassengers >= 3 ? 15 : 10;
+          const reward = queueBefore >= 3 ? 15 : 10;   // threshold from pre-decrement count
           stepReward += reward;
 
-          const nextSv = stateVec(taxi.row, taxi.col, s.zones, true);
+          // nextState: post-pickup zone, still idle (carrying taxis don't query Q-table)
+          const nextSv = stateVec(taxi.row, taxi.col, s.zones, false);
           dispatcher.learn({ state: prevSv, action: "pickup", reward, nextState: nextSv });
         } else {
           taxi.lastAction = "wait_no_passengers";

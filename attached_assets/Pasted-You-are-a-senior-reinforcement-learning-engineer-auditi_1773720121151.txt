@@ -1,0 +1,106 @@
+You are a senior reinforcement learning engineer auditing a TypeScript-based taxi fleet simulation.
+
+The system includes:
+
+• Q-learning with replay buffer
+• epsilon-greedy exploration
+• demand prediction (EMA)
+• reward shaping (movement toward demand)
+• pickup as a learnable action
+• multi-agent taxi coordination
+• episode-based training (50 steps)
+• analytics dashboard (reward, Q-values, utilization, wait time)
+
+Recent changes were made to:
+
+• fix reward explosion
+• add proportional movement reward
+• convert pickup into a decision action
+• separate "pickup" from "stay" in Q-table
+• reduce penalties and stabilize learning
+
+Now the system shows **consistently positive episode rewards**.
+
+---
+
+YOUR TASK
+
+Perform a **strict technical audit** of the RL system.
+
+Do NOT assume correctness.
+
+You must:
+
+1. Identify any **logical bugs**
+2. Identify any **reward design flaws**
+3. Identify any **learning leakage or bias**
+4. Identify any **exploitable reward loops**
+5. Identify any **state representation weaknesses**
+6. Identify any **incorrect Q-learning usage**
+7. Identify any **action space inconsistencies**
+8. Identify any **simulation flaws affecting learning**
+
+---
+
+FOR EACH ISSUE FOUND
+
+Provide:
+
+• exact problem description
+• why it is incorrect (RL reasoning)
+• how it affects learning behavior
+• precise code fix (TypeScript)
+
+---
+
+IMPORTANT CHECKS
+
+Specifically verify:
+
+• Is reward too easy to exploit?
+• Is pickup over-rewarded vs movement?
+• Is waiting penalty sufficient to force optimization?
+• Are taxis actually learning or just exploiting local reward?
+• Are Q-values stable and meaningful?
+• Is epsilon decay appropriate?
+• Is replay buffer used correctly?
+• Is there any bias toward "stay" or "pickup"?
+
+---
+
+VALIDATION TESTS
+
+Simulate mentally and check:
+
+• Does agent spread across zones or cluster?
+• Does agent anticipate demand or react late?
+• Does utilization improve over time?
+• Does wait time actually decrease?
+
+---
+
+OUTPUT FORMAT
+
+1. Overall verdict:
+
+   * Correct / Partially correct / Buggy
+
+2. Critical issues (if any)
+
+3. Minor issues (if any)
+
+4. Suggested fixes (with code)
+
+5. Final recommendation:
+
+   * Ready
+   * Needs tuning
+   * Needs redesign
+
+---
+
+STRICT RULE
+
+Do NOT say "everything is fine" unless you are absolutely certain.
+
+Assume the system is flawed until proven otherwise.
