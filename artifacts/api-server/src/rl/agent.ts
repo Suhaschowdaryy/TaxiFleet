@@ -198,24 +198,35 @@ export class RLAgent {
       ...neighborCells,
     ];
 
-    // Score each candidate: Q-value is the dominant factor.
-    // The tiny pickupNudge (max 3.0) only matters in early exploration when
-    // Q-values are all near 0 — once the agent accumulates experience,
-    // Q-values dwarf this nudge.
-    const scored = candidates.map(c => {
-      const z          = zones[c.row * gridSize + c.col];
-      const qv         = this.qTable.get(sv, c.action);
-      const pickupNudge =
-        c.action === "pickup" && z.waitingPassengers > 0 ? 3.0 : 0;
+    // Training progress: 0 (fresh) → 1 (fully trained), derived from epsilon decay.
+    // As epsilon falls from epsilonInit → epsilonMin, progress rises 0 → 1.
+    const trainingProgress =
+      1 - (this.epsilon - RL_CONFIG.epsilonMin) /
+          (RL_CONFIG.epsilonInit - RL_CONFIG.epsilonMin);
 
-      const totalScore = qv * 2.0 + pickupNudge;
+    // Q-value weight scales 1.0 → 2.0 as the agent trains.
+    // Early: Q-values are noisy so we trust them less (weight 1.0).
+    // Late:  Q-values are reliable so they dominate fully (weight 2.0).
+    const qScale = 1.0 + trainingProgress;
+
+    // Pickup nudge decays with epsilon (max 1.0 early, ~0 when fully trained).
+    // Only guides early exploration; Q-values take over as training progresses.
+    const nudgeStrength = this.epsilon / RL_CONFIG.epsilonInit; // 1.0 → ~0.17
+
+    const scored = candidates.map(c => {
+      const z           = zones[c.row * gridSize + c.col];
+      const qv          = this.qTable.get(sv, c.action);
+      const pickupNudge =
+        c.action === "pickup" && z.waitingPassengers > 0 ? nudgeStrength : 0;
+
+      const totalScore = qv * qScale + pickupNudge;
 
       return {
         ...c,
         totalScore,
         qv,
-        predictedDemand: z.predictedDemand,
-        futureDemandBonus: z.predictedDemand * 0.5,
+        predictedDemand:   z.predictedDemand,
+        futureDemandBonus: z.predictedDemand * 1.0,
       };
     });
 

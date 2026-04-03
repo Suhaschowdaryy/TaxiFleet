@@ -247,6 +247,9 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
 
     let stepReward = 0;
 
+    // Max predicted demand across all zones — used for gradient penalty below
+    const maxDemandInGrid = Math.max(...s.zones.map(z => z.predictedDemand));
+
     // ── 4. Step each taxi ────────────────────────────────────────────────────
     for (const taxi of s.taxis) {
       // ── 4a. Taxis currently on a trip ──────────────────────────────────────
@@ -330,17 +333,23 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
         //
         // 2. Future demand alignment bonus: reward pre-positioning toward
         //    zones with high predicted demand (forward-looking signal).
-        //    This teaches the agent to reposition before demand spikes.
-        const futureDemandBonus = destZone.predictedDemand * 0.5;
+        //    Doubled from 0.5 → 1.0 so movement toward demand is clearly
+        //    beneficial and the agent has a strong incentive to reposition.
+        const futureDemandBonus = destZone.predictedDemand * 1.0;
         //
-        // 3. Low-demand penalty: strongly discourage parking in dead zones
-        //    that have no current passengers and negligible predicted demand.
+        // 3. Hard low-demand penalty: strongly discourage parking in dead zones.
         const lowDemandPenalty =
           destZone.predictedDemand < 1.5 && destZone.waitingPassengers === 0
             ? -10
             : 0;
         //
-        // 4. Idle penalty: -5 total (-1 time + -4 here) when staying put
+        // 4. Gradient-based demand penalty: continuous signal that teaches the
+        //    agent to distinguish between mediocre and good zones, not just
+        //    avoid the worst ones. The better the destination zone relative to
+        //    the grid maximum, the smaller this penalty becomes (zero at max).
+        const gradientPenalty = (maxDemandInGrid - destZone.predictedDemand) * 0.5;
+        //
+        // 5. Idle penalty: -5 total (-1 time + -4 here) when staying put
         //    while passengers are waiting in other zones.
         let idlePenalty = 0;
         if (decision.action === "stay") {
@@ -351,7 +360,7 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
         }
 
         const moveReward =
-          timePenalty + futureDemandBonus + lowDemandPenalty + idlePenalty;
+          timePenalty + futureDemandBonus + lowDemandPenalty - gradientPenalty + idlePenalty;
         stepReward += moveReward;
 
         const nextSv = buildStateVec(taxi.row, taxi.col, GRID_SIZE, s.zones, false);

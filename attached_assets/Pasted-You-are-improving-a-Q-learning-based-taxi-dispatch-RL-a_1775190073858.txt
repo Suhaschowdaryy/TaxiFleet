@@ -1,0 +1,72 @@
+You are improving a Q-learning based taxi dispatch RL agent. The current version correctly prioritizes Q-values but has issues with early instability, reward imbalance, and residual heuristic bias. Apply the following precise fixes:
+
+1. Reduce Pickup Heuristic Bias
+
+* Current: `pickupNudge = +3.0`
+* Problem: Dominates early learning when Q-values are near zero
+* Fix:
+
+  * Reduce to `+1.0` maximum
+  * OR gradually decay it over time (e.g., multiply by epsilon or training progress)
+* Goal: Prevent heuristic from overriding learned behavior
+
+2. Strengthen Movement Incentive
+
+* Current movement reward: `-1 + predictedDemand * 0.5`
+* Problem: Movement is weakly rewarded and often ignored
+* Fix:
+
+  * Change to: `-1 + predictedDemand * 1.0`
+* Goal: Make moving toward high-demand zones clearly beneficial
+
+3. Add Gradient-Based Demand Penalty
+
+* Current: Only penalizes extreme low-demand zones (`-10`)
+* Problem: Agent cannot distinguish between mediocre vs good zones
+* Fix:
+
+  * Add continuous penalty:
+    `reward -= (maxDemandInGrid - currentZoneDemand) * 0.5`
+* Goal: Teach directional improvement, not just avoidance of worst zones
+
+4. Stabilize Early Learning (Q-value Scaling)
+
+* Current: `qv * 2.0`
+* Problem: Q-values are unreliable early in training
+* Fix:
+
+  * Use progressive scaling:
+    `qv * (1.0 + trainingProgress)`
+    where `trainingProgress` increases from 0 → 1 over episodes
+* Alternative (simpler):
+  start with `qv * 1.0`, increase to `2.0` after sufficient training
+* Goal: Prevent noisy early decisions and improve convergence
+
+5. Maintain Strong Core Rewards
+   Ensure the following reward structure remains:
+
+* +20 → successful pickup
+* -1 → per step (time penalty)
+* -2 → failed pickup
+* -10 → entering very low-demand zone
+* * predictedDemand-based bonus → future positioning
+
+6. Keep RL as the Primary Decision Driver
+
+* Do NOT reintroduce:
+
+  * domainScore
+  * rebalancingScore
+  * crowdPenalty
+* Only minimal heuristics allowed (pickup nudge, optionally decaying)
+* Final action selection must be dominated by Q-values
+
+Goal:
+Create a stable, learning-driven RL agent that:
+
+* explores effectively early
+* learns smooth demand gradients
+* prioritizes long-term positioning
+* converges faster without heuristic crutches
+
+Focus on correctness and learning behavior, not adding complexity.
