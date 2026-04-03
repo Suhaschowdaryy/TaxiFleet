@@ -93,6 +93,12 @@ export interface HistoryPoint {
   /** Exploration rate at this step */
   epsilon: number;
   predictionAccuracy: number;
+  /** Cumulative pickup reward this step (fleet-wide) */
+  pickupReward: number;
+  /** Cumulative movement reward this step (fleet-wide) */
+  movementReward: number;
+  /** Cumulative delivery-completion reward this step (fleet-wide) */
+  deliveryReward: number;
 }
 
 export interface SimulationState {

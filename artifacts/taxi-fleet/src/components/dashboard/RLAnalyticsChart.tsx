@@ -5,6 +5,8 @@ import {
   Area,
   LineChart,
   Line,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -14,7 +16,7 @@ import {
 } from "recharts";
 import { HistoryPoint, RLAnalytics } from "@workspace/api-client-react";
 
-type Tab = "rewards" | "qvalue" | "epsilon";
+type Tab = "rewards" | "breakdown" | "qvalue" | "epsilon";
 
 interface RLAnalyticsChartProps {
   data: HistoryPoint[];
@@ -22,9 +24,10 @@ interface RLAnalyticsChartProps {
 }
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: "rewards",  label: "Rewards"       },
-  { id: "qvalue",   label: "Q-Convergence" },
-  { id: "epsilon",  label: "ε + Accuracy"  },
+  { id: "rewards",   label: "Rewards"       },
+  { id: "breakdown", label: "Breakdown"     },
+  { id: "qvalue",    label: "Q-Convergence" },
+  { id: "epsilon",   label: "ε + Accuracy"  },
 ];
 
 const TOOLTIP_STYLE = {
@@ -69,7 +72,6 @@ export function RLAnalyticsChart({ data, analytics }: RLAnalyticsChartProps) {
             {t.label}
           </button>
         ))}
-        {/* Live badge */}
         <span className="ml-auto px-2 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase bg-primary/20 text-primary border border-primary/30 flex-shrink-0">
           Ep {analytics.episodeNumber}
         </span>
@@ -79,6 +81,7 @@ export function RLAnalyticsChart({ data, analytics }: RLAnalyticsChartProps) {
       <div className="flex-1 min-h-0">
         {data.length === 0 ? <EmptyState /> : (
           <>
+            {/* ── Rewards: step reward + cumulative episode reward ─────────── */}
             {activeTab === "rewards" && (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={display} margin={{ top: 10, right: 8, left: -10, bottom: 0 }}>
@@ -103,6 +106,24 @@ export function RLAnalyticsChart({ data, analytics }: RLAnalyticsChartProps) {
               </ResponsiveContainer>
             )}
 
+            {/* ── Breakdown: pickup / movement / delivery per step ─────────── */}
+            {activeTab === "breakdown" && (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={display} margin={{ top: 10, right: 8, left: -10, bottom: 0 }} barCategoryGap="20%">
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} opacity={0.4} />
+                  <XAxis dataKey="timeStep" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} minTickGap={20} />
+                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} width={38} />
+                  <ReferenceLine y={0} stroke="hsl(var(--border))" strokeDasharray="3 3" />
+                  <Tooltip {...TOOLTIP_STYLE} />
+                  <Legend wrapperStyle={{ paddingTop: "12px", fontSize: "11px", opacity: 0.8 }} iconType="circle" />
+                  <Bar dataKey="pickupReward"   name="Pickup Reward"   fill="hsl(var(--chart-2))" stackId="a" radius={[0,0,0,0]} />
+                  <Bar dataKey="deliveryReward" name="Delivery Reward" fill="hsl(var(--chart-4))" stackId="a" radius={[0,0,0,0]} />
+                  <Bar dataKey="movementReward" name="Move Reward"     fill="hsl(var(--chart-1))" stackId="a" radius={[2,2,0,0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+
+            {/* ── Q-Convergence ────────────────────────────────────────────── */}
             {activeTab === "qvalue" && (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={display} margin={{ top: 10, right: 8, left: -10, bottom: 0 }}>
@@ -126,6 +147,7 @@ export function RLAnalyticsChart({ data, analytics }: RLAnalyticsChartProps) {
               </ResponsiveContainer>
             )}
 
+            {/* ── Epsilon + Prediction Accuracy ─────────────────────────────── */}
             {activeTab === "epsilon" && (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={display} margin={{ top: 10, right: 8, left: -10, bottom: 0 }}>

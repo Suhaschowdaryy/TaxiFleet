@@ -84,6 +84,9 @@ export const RunSimulationResponse = zod.object({
       avgQValue: zod.number().describe("Average Q-value snapshot at this step"),
       epsilon: zod.number().describe("Exploration rate at this step"),
       predictionAccuracy: zod.number(),
+      pickupReward: zod.number().describe("Fleet-wide pickup reward this step"),
+      movementReward: zod.number().describe("Fleet-wide movement reward this step"),
+      deliveryReward: zod.number().describe("Fleet-wide delivery reward this step"),
     }),
   ),
   rlAnalytics: zod.object({
@@ -169,6 +172,9 @@ export const ResetSimulationResponse = zod.object({
       avgQValue: zod.number().describe("Average Q-value snapshot at this step"),
       epsilon: zod.number().describe("Exploration rate at this step"),
       predictionAccuracy: zod.number(),
+      pickupReward: zod.number().describe("Fleet-wide pickup reward this step"),
+      movementReward: zod.number().describe("Fleet-wide movement reward this step"),
+      deliveryReward: zod.number().describe("Fleet-wide delivery reward this step"),
     }),
   ),
   rlAnalytics: zod.object({
@@ -254,6 +260,9 @@ export const GetSimulationStateResponse = zod.object({
       avgQValue: zod.number().describe("Average Q-value snapshot at this step"),
       epsilon: zod.number().describe("Exploration rate at this step"),
       predictionAccuracy: zod.number(),
+      pickupReward: zod.number().describe("Fleet-wide pickup reward this step"),
+      movementReward: zod.number().describe("Fleet-wide movement reward this step"),
+      deliveryReward: zod.number().describe("Fleet-wide delivery reward this step"),
     }),
   ),
   rlAnalytics: zod.object({

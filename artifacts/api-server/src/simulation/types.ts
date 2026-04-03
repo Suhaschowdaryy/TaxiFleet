@@ -68,6 +68,9 @@ export interface HistoryPoint {
   avgQValue: number;
   epsilon: number;
   predictionAccuracy: number;
+  pickupReward: number;
+  movementReward: number;
+  deliveryReward: number;
 }
 
 export interface SimulationState {
