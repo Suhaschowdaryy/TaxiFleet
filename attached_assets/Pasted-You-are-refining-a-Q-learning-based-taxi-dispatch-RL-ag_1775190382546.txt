@@ -1,0 +1,78 @@
+You are refining a Q-learning based taxi dispatch RL agent that already uses Q-dominant scoring and a shaped reward function. The current system works but suffers from reward inflation, unstable scaling, and weak mid-level learning signals. Apply the following precise improvements:
+
+1. Cap Movement Reward (Prevent Reward Hacking)
+
+* Current: `futureDemandBonus = predictedDemand * 1.0`
+* Problem: Movement can become too rewarding and compete with pickup
+* Fix:
+
+  * Either cap or scale down:
+    `futureDemandBonus = min(predictedDemand, 4.0)`
+    OR
+    `futureDemandBonus = predictedDemand * 0.8`
+* Constraint: Movement reward must always remain significantly lower than pickup reward (+20)
+* Goal: Prevent agent from preferring movement loops over actual pickups
+
+2. Reduce Gradient Penalty Strength
+
+* Current:
+  `gradientPenalty = (maxDemand - predictedDemand) * 0.5`
+* Problem: Over-penalizes mid-tier zones and weakens learning signal
+* Fix:
+  `gradientPenalty = (maxDemand - predictedDemand) * 0.3`
+* Goal: Preserve directional guidance without suppressing useful movement
+
+3. Normalize Demand Values (Critical for Stability)
+
+* Problem: Raw demand values can scale unpredictably and destabilize Q-values
+* Fix:
+
+  * Compute:
+    `normalizedDemand = predictedDemand / maxDemand`
+  * Use normalizedDemand in:
+
+    * futureDemandBonus
+    * gradientPenalty
+* Example:
+  `futureDemandBonus = normalizedDemand * 4.0`
+  `gradientPenalty = (1 - normalizedDemand) * 2.0`
+* Goal: Keep reward scale consistent across all scenarios
+
+4. Ensure Reward Balance (Movement vs Pickup)
+
+* Validate that:
+
+  * Pickup reward (+20) is always the highest-value action
+  * Movement reward (after bonus and penalties) stays moderate (~+1 to +4 max)
+* Goal: Maintain correct priority hierarchy
+
+5. Optional: Add Directional Penalty (Advanced Improvement)
+
+* If the chosen move leads away from a higher-demand neighboring zone:
+  `reward -= 1`
+* This requires comparing current zone demand vs neighboring zones
+* Goal: Speed up learning by discouraging clearly suboptimal movement
+
+6. Monitor Q-Value Stability
+
+* Track average Q-values over time
+* Ensure Q-values do not grow unbounded
+* If Q-values continuously increase without stabilizing:
+
+  * reduce reward magnitudes
+  * or normalize further
+* Goal: Ensure convergence and stable learning
+
+Constraints:
+
+* Do NOT reintroduce heuristic scoring (domainScore, rebalancingScore, crowdPenalty)
+* Keep RL as the dominant decision mechanism
+* Avoid adding unnecessary complexity
+
+Goal:
+Create a stable, well-scaled RL agent that:
+
+* prioritizes pickups correctly
+* moves intelligently toward demand
+* avoids reward exploitation
+* converges reliably without oscillation

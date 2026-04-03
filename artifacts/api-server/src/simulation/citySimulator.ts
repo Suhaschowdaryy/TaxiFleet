@@ -328,28 +328,47 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
 
         // ── Reward design: RL-driven, minimal heuristics ─────────────────
         //
-        // 1. Time-step cost: penalise every step to encourage urgency
+        // Normalize demand so reward magnitudes stay stable regardless of how
+        // stochastic demand fluctuates. All demand-based terms use this value.
+        // normalizedDemand ∈ [0, 1], = 1.0 at the grid's best zone.
+        const normalizedDemand =
+          maxDemandInGrid > 0 ? destZone.predictedDemand / maxDemandInGrid : 0;
+        //
+        // 1. Time-step cost: encourages urgency on every step
         const timePenalty = -1;
         //
-        // 2. Future demand alignment bonus: reward pre-positioning toward
-        //    zones with high predicted demand (forward-looking signal).
-        //    Doubled from 0.5 → 1.0 so movement toward demand is clearly
-        //    beneficial and the agent has a strong incentive to reposition.
-        const futureDemandBonus = destZone.predictedDemand * 1.0;
+        // 2. Future demand alignment bonus (capped at +4.0).
+        //    Movement toward the best zone earns +4.0 max — well below the
+        //    +20 pickup reward so the agent always prefers actual pickups.
+        const futureDemandBonus = normalizedDemand * 4.0;
         //
-        // 3. Hard low-demand penalty: strongly discourage parking in dead zones.
+        // 3. Hard low-demand penalty: strongly discourage parking in dead zones
+        //    that have no current passengers and negligible predicted demand.
         const lowDemandPenalty =
           destZone.predictedDemand < 1.5 && destZone.waitingPassengers === 0
             ? -10
             : 0;
         //
-        // 4. Gradient-based demand penalty: continuous signal that teaches the
-        //    agent to distinguish between mediocre and good zones, not just
-        //    avoid the worst ones. The better the destination zone relative to
-        //    the grid maximum, the smaller this penalty becomes (zero at max).
-        const gradientPenalty = (maxDemandInGrid - destZone.predictedDemand) * 0.5;
+        // 4. Gradient penalty (normalized, reduced from 0.5 → 0.3 scalar).
+        //    Provides smooth directional guidance without over-penalizing
+        //    mid-tier zones.  Penalty = 0 at best zone, max 2.0 at worst.
+        const gradientPenalty = (1 - normalizedDemand) * 2.0;
         //
-        // 5. Idle penalty: -5 total (-1 time + -4 here) when staying put
+        // 5. Directional penalty: discourage moves that lead to a zone with
+        //    lower predicted demand than the best available neighbor of the
+        //    origin. Teaches gradient-following without hard heuristics.
+        const moved = oldRow !== taxi.row || oldCol !== taxi.col;
+        let directionalPenalty = 0;
+        if (moved) {
+          const bestNeighborDemand = Math.max(
+            ...([ [oldRow-1,oldCol],[oldRow+1,oldCol],[oldRow,oldCol-1],[oldRow,oldCol+1] ]
+              .filter(([r,c]) => r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE)
+              .map(([r,c]) => s.zones[zi(r as number, c as number)].predictedDemand)),
+          );
+          if (destZone.predictedDemand < bestNeighborDemand) directionalPenalty = -1;
+        }
+        //
+        // 6. Idle penalty: -5 total (-1 time + -4 here) when staying put
         //    while passengers are waiting in other zones.
         let idlePenalty = 0;
         if (decision.action === "stay") {
@@ -360,7 +379,8 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
         }
 
         const moveReward =
-          timePenalty + futureDemandBonus + lowDemandPenalty - gradientPenalty + idlePenalty;
+          timePenalty + futureDemandBonus + lowDemandPenalty
+          - gradientPenalty + directionalPenalty + idlePenalty;
         stepReward += moveReward;
 
         const nextSv = buildStateVec(taxi.row, taxi.col, GRID_SIZE, s.zones, false);
