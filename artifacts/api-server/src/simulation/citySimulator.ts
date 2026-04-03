@@ -1,101 +1,44 @@
-export type TaxiStatus = "idle" | "carrying_passenger" | "moving_to_pickup";
+/**
+ * City Simulation — environment only.
+ *
+ * Responsible for: zones, taxis, demand generation, EMA prediction,
+ * episode management, reward calculation, and metrics.
+ *
+ * The RL agent (Q-learning, replay buffer, dispatch policy) lives in:
+ *   src/rl/agent.ts
+ */
 
-export interface TaxiDebugInfo {
-  chosenAction: string;
-  qValue: number;
-  demandScore: number;
-  rebalancingScore: number;
-  stateKey: string;
-}
+import {
+  TaxiStatus,
+  Zone,
+  Taxi,
+  SimulationMetrics,
+  HistoryPoint,
+  SimulationState,
+} from "./types";
 
-export interface Zone {
-  id: string;
-  row: number;
-  col: number;
-  demand: number;
-  predictedDemand: number;
-  waitingPassengers: number;
-  taxiCount: number;
-  name: string;
-  trafficLevel: number;
-  category: string;
-  imbalance: number;
-}
+import {
+  RLAgent,
+  createRLAgent,
+  buildStateVec,
+} from "../rl/agent";
 
-export interface Taxi {
-  id: string;
-  row: number;
-  col: number;
-  status: TaxiStatus;
-  tripsCompleted: number;
-  revenue: number;
-  lastAction: string;
-  destinationZone: string | null;
-  tripTimeRemaining: number | null;
-  debugInfo: TaxiDebugInfo | null;
-}
+export type { TaxiStatus, Zone, Taxi, SimulationMetrics, HistoryPoint };
+export type { SimulationState };
+export type { RLAnalytics } from "./types";
 
-export interface RLAnalytics {
-  epsilon: number;
-  replayBufferSize: number;
-  episodeNumber: number;
-  avgQValue: number;
-  predictionAccuracy: number;
-  totalQUpdates: number;
-}
-
-export interface SimulationMetrics {
-  totalTripsCompleted: number;
-  totalRevenue: number;
-  averageWaitTime: number;
-  utilizationRate: number;
-  totalReward: number;
-  timeStep: number;
-  episodeReward: number;
-}
-
-export interface HistoryPoint {
-  timeStep: number;
-  tripsCompleted: number;
-  revenue: number;
-  utilizationRate: number;
-  waitTime: number;
-  reward: number;
-  episodeReward: number;
-  avgQValue: number;
-  epsilon: number;
-  predictionAccuracy: number;
-}
-
-export interface SimulationState {
-  taxis: Taxi[];
-  zones: Zone[];
-  metrics: SimulationMetrics;
-  history: HistoryPoint[];
-  rlAnalytics: RLAnalytics;
-  gridSize: number;
-  running: boolean;
-  debugMode: boolean;
-}
-
-// ─── 5×5 Grid Definition ──────────────────────────────────────────────────────
-const GRID_SIZE = 5;
-const NUM_TAXIS = 12;
+// ─── Simulation constants ─────────────────────────────────────────────────────
+const GRID_SIZE      = 5;
+const NUM_TAXIS      = 12;
 const EPISODE_LENGTH = 50;
-const ALPHA = 0.1;
-const GAMMA = 0.95;
-const BATCH_SIZE = 32;
-const REPLAY_CAPACITY = 10_000;
-const EPSILON_DECAY = 0.995;
-const EPSILON_MIN = 0.05;
-const EPSILON_INIT = 0.3;
 
+// ─── Zone definitions ─────────────────────────────────────────────────────────
 interface ZoneDef {
-  name: string;
-  lambda: number;
-  traffic: number;
-  category: string;
-  tripRevenue: number;
+  name:       string;
+  lambda:     number;
+  traffic:    number;
+  category:   string;
+  tripRevenue:number;
 }
 
 const ZONE_DEFS: ZoneDef[][] = [
@@ -136,7 +79,7 @@ const ZONE_DEFS: ZoneDef[][] = [
   ],
 ];
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Environment helpers ──────────────────────────────────────────────────────
 function poissonSample(lambda: number): number {
   if (lambda <= 0) return 0;
   const L = Math.exp(-Math.min(lambda, 20));
@@ -147,24 +90,24 @@ function poissonSample(lambda: number): number {
 
 function zi(row: number, col: number) { return row * GRID_SIZE + col; }
 
-function tripDuration(r1: number, c1: number, r2: number, c2: number, traffic: number) {
+function tripDuration(
+  r1: number, c1: number,
+  r2: number, c2: number,
+  traffic: number,
+): number {
   const dist = Math.abs(r1 - r2) + Math.abs(c1 - c2);
   return Math.max(1, Math.round(dist * (1 + traffic)));
 }
 
-function neighbors(row: number, col: number) {
-  return [
-    { row: row - 1, col, action: "north" as const },
-    { row: row + 1, col, action: "south" as const },
-    { row, col: col - 1, action: "west"  as const },
-    { row, col: col + 1, action: "east"  as const },
-  ].filter(n => n.row >= 0 && n.row < GRID_SIZE && n.col >= 0 && n.col < GRID_SIZE);
+/** Compute a zone's combined demand score (used for reward shaping). */
+function demandScore(zone: Zone): number {
+  return zone.waitingPassengers + zone.predictedDemand * 0.7;
 }
 
-// ─── Demand Predictor (EMA) ───────────────────────────────────────────────────
+// ─── EMA Demand Predictor ────────────────────────────────────────────────────
 class DemandPredictor {
   private history = new Map<string, number[]>();
-  private alpha = 0.35;
+  private alpha   = 0.35;
 
   record(id: string, val: number) {
     const h = this.history.get(id) ?? [];
@@ -185,194 +128,12 @@ class DemandPredictor {
   accuracy(id: string, actual: number): number {
     const h = this.history.get(id);
     if (!h || h.length < 2) return 1;
-    const predicted = h[h.length - 2]; // last prediction was the previous recorded value
+    const predicted = h[h.length - 2];
     return 1 - Math.min(1, Math.abs(predicted - actual) / Math.max(actual, 1));
   }
 }
 
-// ─── Experience Replay Buffer ─────────────────────────────────────────────────
-interface StateVec {
-  zoneIdx: number;
-  demandBucket: number;   // 0-3
-  predictedBucket: number;
-  trafficBucket: number;  // 0-2
-  occupied: number;       // 0|1
-}
-
-interface Transition {
-  state: StateVec;
-  action: string;
-  reward: number;
-  nextState: StateVec;
-}
-
-class ReplayBuffer {
-  private buf: Transition[] = [];
-  private capacity: number;
-
-  constructor(capacity = REPLAY_CAPACITY) { this.capacity = capacity; }
-
-  push(t: Transition) {
-    if (this.buf.length >= this.capacity) this.buf.shift();
-    this.buf.push(t);
-  }
-
-  sample(size: number): Transition[] {
-    if (this.buf.length < size) return [...this.buf];
-    const out: Transition[] = [];
-    for (let i = 0; i < size; i++)
-      out.push(this.buf[Math.floor(Math.random() * this.buf.length)]);
-    return out;
-  }
-
-  get size() { return this.buf.length; }
-}
-
-// ─── Q-Learning Dispatcher with Experience Replay ─────────────────────────────
-type ActionKey = "stay" | "north" | "south" | "west" | "east" | "pickup";
-
-function discretize(val: number, thresholds: number[]): number {
-  for (let i = 0; i < thresholds.length; i++) if (val < thresholds[i]) return i;
-  return thresholds.length;
-}
-
-function stateVec(row: number, col: number, zones: Zone[], occupied: boolean): StateVec {
-  const z = zones[zi(row, col)];
-  return {
-    zoneIdx: zi(row, col),
-    demandBucket:    discretize(z.waitingPassengers,   [2, 4, 7]),
-    predictedBucket: discretize(z.predictedDemand,    [2, 4, 6]),
-    trafficBucket:   discretize(z.trafficLevel,        [0.4, 0.7]),
-    occupied:        occupied ? 1 : 0,
-  };
-}
-
-function stateKey(sv: StateVec) {
-  return `${sv.zoneIdx}|${sv.demandBucket}|${sv.predictedBucket}|${sv.trafficBucket}|${sv.occupied}`;
-}
-
-class RLDispatcher {
-  private qTable = new Map<string, number>();
-  private replayBuf = new ReplayBuffer();
-  epsilon = EPSILON_INIT;
-  totalQUpdates = 0;
-  private stepsSinceReplay = 0;
-
-  private qKey(sv: StateVec, action: string) {
-    return `${stateKey(sv)}::${action}`;
-  }
-
-  private getQ(sv: StateVec, action: string): number {
-    return this.qTable.get(this.qKey(sv, action)) ?? 0;
-  }
-
-  private setQ(sv: StateVec, action: string, val: number) {
-    this.qTable.set(this.qKey(sv, action), val);
-  }
-
-  avgQ(): number {
-    if (this.qTable.size === 0) return 0;
-    let sum = 0;
-    for (const v of this.qTable.values()) sum += v;
-    return sum / this.qTable.size;
-  }
-
-  // Store transition and periodically do a batch update
-  learn(t: Transition) {
-    this.replayBuf.push(t);
-    this.stepsSinceReplay++;
-
-    if (this.stepsSinceReplay >= 4 && this.replayBuf.size >= BATCH_SIZE) {
-      this.stepsSinceReplay = 0;
-      const batch = this.replayBuf.sample(BATCH_SIZE);
-      for (const { state, action, reward, nextState } of batch) {
-        const allActions: ActionKey[] = ["stay", "north", "south", "west", "east", "pickup"];
-        const bestNext = Math.max(...allActions.map(a => this.getQ(nextState, a)));
-        const current = this.getQ(state, action);
-        const updated = current + ALPHA * (reward + GAMMA * bestNext - current);
-        this.setQ(state, action, updated);
-        this.totalQUpdates++;
-      }
-    }
-  }
-
-  dispatch(
-    taxi: Taxi,
-    zones: Zone[],
-    targetCounts: Map<number, number>,
-    debugMode: boolean
-  ): { row: number; col: number; action: string; debug: TaxiDebugInfo } {
-    const sv = stateVec(taxi.row, taxi.col, zones, taxi.status === "carrying_passenger");
-
-    // Build candidates: stay + pickup (same cell) + neighbors
-    const candidates: { row: number; col: number; action: ActionKey }[] = [
-      { row: taxi.row, col: taxi.col, action: "stay"   },
-      { row: taxi.row, col: taxi.col, action: "pickup" },
-      ...neighbors(taxi.row, taxi.col),
-    ];
-
-    // Score each candidate
-    const scored = candidates.map(c => {
-      const z = zones[zi(c.row, c.col)];
-      const supply = targetCounts.get(zi(c.row, c.col)) ?? 0;
-
-      // Pickup-specific bonus/penalty based on real-time queue length
-      let actionScore = 0;
-      if (c.action === "pickup") {
-        actionScore = z.waitingPassengers > 0
-          ? 10 + z.waitingPassengers * 2   // reward picking up when passengers present
-          : -5;                             // penalise attempting pickup with empty queue
-      }
-
-      // Multi-agent coordination: penalise overcrowded zones
-      const crowdPenalty = supply > 3 ? -5 * (supply - 2) : 0;
-
-      // Supply-demand rebalancing score
-      const rebalScore = 0.6 * z.predictedDemand - 0.3 * supply + crowdPenalty;
-
-      // Q(s, a): always query the CURRENT state sv, not the destination state
-      const qv = this.getQ(sv, c.action);
-
-      const domainScore = z.predictedDemand * (1 + 0.3 * z.trafficLevel) + z.waitingPassengers * 2;
-      const totalScore = domainScore + qv * 0.4 + rebalScore + actionScore;
-
-      return { ...c, totalScore, qv, domainScore, rebalScore };
-    });
-
-    // Epsilon-greedy selection
-    let chosen = scored[0];
-    if (Math.random() < this.epsilon) {
-      chosen = scored[Math.floor(Math.random() * scored.length)];
-    } else {
-      for (const s of scored) if (s.totalScore > chosen.totalScore) chosen = s;
-    }
-
-    return {
-      row: chosen.row,
-      col: chosen.col,
-      action: chosen.action,
-      debug: {
-        chosenAction: chosen.action,
-        qValue: Math.round(chosen.qv * 100) / 100,
-        demandScore: Math.round(chosen.domainScore * 100) / 100,
-        rebalancingScore: Math.round(chosen.rebalScore * 100) / 100,
-        stateKey: stateKey(sv),
-      },
-    };
-  }
-
-  decayEpsilon() {
-    this.epsilon = Math.max(EPSILON_MIN, this.epsilon * EPSILON_DECAY);
-  }
-
-  get bufferSize() { return this.replayBuf.size; }
-}
-
-// ─── Singletons (survive across steps) ───────────────────────────────────────
-const dispatcher = new RLDispatcher();
-const predictor = new DemandPredictor();
-
-// ─── Factory ──────────────────────────────────────────────────────────────────
+// ─── Zone / Taxi factories ────────────────────────────────────────────────────
 function createZones(): Zone[] {
   const zones: Zone[] = [];
   let idx = 1;
@@ -410,39 +171,45 @@ function updateCounts(zones: Zone[], taxis: Taxi[]) {
   taxis.forEach(t => zones[zi(t.row, t.col)].taxiCount++);
 }
 
+// ─── Persistent singletons (survive across HTTP calls) ───────────────────────
+const agent: RLAgent       = createRLAgent();
+const predictor            = new DemandPredictor();
+
+// ─── Public API ───────────────────────────────────────────────────────────────
 export function createSimulation(): SimulationState {
   const zones = createZones();
   const taxis = createTaxis();
   updateCounts(zones, taxis);
   return {
     taxis, zones,
-    metrics: { totalTripsCompleted: 0, totalRevenue: 0, averageWaitTime: 0, utilizationRate: 0, totalReward: 0, timeStep: 0, episodeReward: 0 },
+    metrics: {
+      totalTripsCompleted: 0, totalRevenue: 0,
+      averageWaitTime: 0,     utilizationRate: 0,
+      totalReward: 0,         timeStep: 0,
+      episodeReward: 0,
+    },
     history: [],
     rlAnalytics: {
-      epsilon: dispatcher.epsilon,
-      replayBufferSize: 0,
-      episodeNumber: 1,
-      avgQValue: 0,
-      predictionAccuracy: 1,
-      totalQUpdates: 0,
+      epsilon:           agent.epsilon,
+      replayBufferSize:  0,
+      episodeNumber:     1,
+      avgQValue:         0,
+      predictionAccuracy:1,
+      totalQUpdates:     0,
     },
     gridSize: GRID_SIZE,
-    running: false,
-    debugMode: false,
+    running:  false,
+    debugMode:false,
   };
-}
-
-function demandScore(zone: Zone): number {
-  return zone.waitingPassengers + zone.predictedDemand * 0.7;
 }
 
 export function stepSimulation(state: SimulationState, steps = 1): SimulationState {
   let s: SimulationState = {
     ...state,
-    taxis: state.taxis.map(t => ({ ...t })),
-    zones: state.zones.map(z => ({ ...z })),
-    metrics: { ...state.metrics },
-    history: [...state.history],
+    taxis:       state.taxis.map(t => ({ ...t })),
+    zones:       state.zones.map(z => ({ ...z })),
+    metrics:     { ...state.metrics },
+    history:     [...state.history],
     rlAnalytics: { ...state.rlAnalytics },
     running: true,
   };
@@ -450,97 +217,107 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
   for (let step = 0; step < steps; step++) {
     s.metrics.timeStep++;
     const isEpisodeEnd = s.metrics.timeStep % EPISODE_LENGTH === 0;
+
+    // Reset episode reward at the start of each new episode
     if (s.metrics.timeStep % EPISODE_LENGTH === 1 && s.metrics.timeStep > 1) {
       s.metrics.episodeReward = 0;
     }
 
-    // --- 1. Demand generation ---
-    let totalPredError = 0;
+    // ── 1. Demand generation ─────────────────────────────────────────────────
+    let totalPredAcc = 0;
     for (const zone of s.zones) {
-      const lambdaMod = zone.demand * (0.7 + 0.6 * Math.random()) * (1 + 0.3 * zone.trafficLevel);
+      const lambdaMod =
+        zone.demand * (0.7 + 0.6 * Math.random()) * (1 + 0.3 * zone.trafficLevel);
       const newPass = poissonSample(lambdaMod);
       zone.waitingPassengers = Math.min(zone.waitingPassengers + newPass, 8);
-      totalPredError += predictor.accuracy(zone.id, zone.waitingPassengers);
+      totalPredAcc += predictor.accuracy(zone.id, zone.waitingPassengers);
       predictor.record(zone.id, zone.waitingPassengers);
     }
 
-    // --- 2. Update predictions ---
+    // ── 2. Update EMA predictions ────────────────────────────────────────────
     for (const zone of s.zones) {
-      zone.predictedDemand = Math.round(predictor.predict(zone.id, zone.demand) * 10) / 10;
+      zone.predictedDemand =
+        Math.round(predictor.predict(zone.id, zone.demand) * 10) / 10;
     }
 
     updateCounts(s.zones, s.taxis);
 
-    // --- 3. Compute supply-demand imbalance & target counts ---
+    // ── 3. Compute supply–demand imbalance & target counts ───────────────────
     const targetCounts = new Map<number, number>();
     for (const zone of s.zones) {
-      zone.imbalance = Math.round((zone.predictedDemand - zone.taxiCount) * 10) / 10;
+      zone.imbalance =
+        Math.round((zone.predictedDemand - zone.taxiCount) * 10) / 10;
       targetCounts.set(zi(zone.row, zone.col), zone.taxiCount);
     }
 
     let stepReward = 0;
 
-    // --- 4. Step each taxi ---
+    // ── 4. Step each taxi ────────────────────────────────────────────────────
     for (const taxi of s.taxis) {
+      // ── 4a. Taxis currently on a trip ──────────────────────────────────────
       if (taxi.status === "carrying_passenger") {
         if (taxi.tripTimeRemaining !== null && taxi.tripTimeRemaining > 1) {
           taxi.tripTimeRemaining--;
           taxi.lastAction = `delivering (${taxi.tripTimeRemaining}t)`;
         } else {
-          const def = ZONE_DEFS[taxi.row]?.[taxi.col];
+          const def  = ZONE_DEFS[taxi.row]?.[taxi.col];
           const fare = (def?.tripRevenue ?? 15) + 5 + Math.random() * 8;
           taxi.tripsCompleted++;
           taxi.revenue += fare;
           s.metrics.totalTripsCompleted++;
           s.metrics.totalRevenue += fare;
-          taxi.status = "idle";
-          taxi.destinationZone = null;
+          taxi.status        = "idle";
+          taxi.destinationZone   = null;
           taxi.tripTimeRemaining = null;
-          taxi.lastAction = "delivered_passenger";
+          taxi.lastAction    = "delivered_passenger";
           stepReward += 10;
-          // No Q-update on delivery — the reward for this trip was already
-          // credited to the "pickup" action at the time the passenger was picked up.
+          // No Q-update on delivery — reward was credited at pickup time.
         }
         continue;
       }
 
-      // Dispatch idle taxi
-      const prevSv = stateVec(taxi.row, taxi.col, s.zones, false);
-      const dispatch = dispatcher.dispatch(taxi, s.zones, targetCounts, s.debugMode);
+      // ── 4b. Dispatch idle taxi via RL agent ────────────────────────────────
+      const prevSv   = buildStateVec(taxi.row, taxi.col, GRID_SIZE, s.zones, false);
+      const decision = agent.dispatch(taxi, s.zones, GRID_SIZE, targetCounts);
 
-      taxi.debugInfo = dispatch.debug; // always populate; frontend controls display
+      taxi.debugInfo = decision.debug; // always populated; UI toggles display
 
-      if (dispatch.action === "pickup") {
+      // ── 4c. Execute action ─────────────────────────────────────────────────
+      if (decision.action === "pickup") {
         const z = s.zones[zi(taxi.row, taxi.col)];
         if (z.waitingPassengers > 0) {
-          const queueBefore = z.waitingPassengers;   // capture before decrement
+          const queueBefore   = z.waitingPassengers; // capture before decrement
           z.waitingPassengers--;
           const destRow = Math.floor(Math.random() * GRID_SIZE);
           const destCol = Math.floor(Math.random() * GRID_SIZE);
-          const destDef = ZONE_DEFS[destRow][destCol];
-          const duration = tripDuration(taxi.row, taxi.col, destRow, destCol, z.trafficLevel);
-          taxi.status = "carrying_passenger";
-          taxi.destinationZone = destDef.name;
+          const duration =
+            tripDuration(taxi.row, taxi.col, destRow, destCol, z.trafficLevel);
+          taxi.status            = "carrying_passenger";
+          taxi.destinationZone   = ZONE_DEFS[destRow][destCol].name;
           taxi.tripTimeRemaining = duration;
-          taxi.lastAction = "picked_up_passenger";
-          const reward = queueBefore >= 3 ? 15 : 10;   // threshold from pre-decrement count
-          stepReward += reward;
+          taxi.lastAction        = "picked_up_passenger";
 
-          // nextState: post-pickup zone, still idle (carrying taxis don't query Q-table)
-          const nextSv = stateVec(taxi.row, taxi.col, s.zones, false);
-          dispatcher.learn({ state: prevSv, action: "pickup", reward, nextState: nextSv });
+          const reward = queueBefore >= 3 ? 15 : 10;
+          stepReward  += reward;
+
+          // nextState: post-pickup (idle taxis only query Q; occupied=false)
+          const nextSv = buildStateVec(taxi.row, taxi.col, GRID_SIZE, s.zones, false);
+          agent.learn({ state: prevSv, action: "pickup", reward, nextState: nextSv });
+
         } else {
           taxi.lastAction = "wait_no_passengers";
           stepReward -= 1;
-          dispatcher.learn({ state: prevSv, action: "pickup", reward: -1, nextState: prevSv });
+          agent.learn({ state: prevSv, action: "pickup", reward: -1, nextState: prevSv });
         }
-      } else {
-        const oldRow = taxi.row, oldCol = taxi.col;
-        taxi.row = dispatch.row;
-        taxi.col = dispatch.col;
-        taxi.lastAction = dispatch.action;
 
-        // Update target count to prevent crowding
+      } else {
+        // Movement or stay
+        const oldRow = taxi.row, oldCol = taxi.col;
+        taxi.row       = decision.row;
+        taxi.col       = decision.col;
+        taxi.lastAction = decision.action;
+
+        // Update live target counts to prevent cascading crowding
         const newIdx = zi(taxi.row, taxi.col);
         targetCounts.set(newIdx, (targetCounts.get(newIdx) ?? 0) + 1);
         if (oldRow !== taxi.row || oldCol !== taxi.col) {
@@ -548,74 +325,77 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
           targetCounts.set(oldIdx, Math.max(0, (targetCounts.get(oldIdx) ?? 1) - 1));
         }
 
-        const moved = oldRow !== taxi.row || oldCol !== taxi.col;
-        const oldZone = s.zones[zi(oldRow, oldCol)];
-        const newZone = s.zones[zi(taxi.row, taxi.col)];
-        const oldScore = demandScore(oldZone);
-        const newScore = demandScore(newZone);
+        // Proportional reward shaping: reward moving toward demand
+        const moved    = oldRow !== taxi.row || oldCol !== taxi.col;
+        const oldScore = demandScore(s.zones[zi(oldRow, oldCol)]);
+        const newScore = demandScore(s.zones[zi(taxi.row, taxi.col)]);
+        const delta    = newScore - oldScore;
 
-        const delta = newScore - oldScore;
         let moveReward = moved ? delta * 0.5 : -0.2;
-        moveReward = Math.max(-2, Math.min(3, moveReward));
-        stepReward += moveReward;
+        moveReward     = Math.max(-2, Math.min(3, moveReward));
+        stepReward    += moveReward;
 
-        const nextSv = stateVec(taxi.row, taxi.col, s.zones, false);
-        dispatcher.learn({ state: prevSv, action: dispatch.action, reward: moveReward, nextState: nextSv });
+        const nextSv = buildStateVec(taxi.row, taxi.col, GRID_SIZE, s.zones, false);
+        agent.learn({ state: prevSv, action: decision.action, reward: moveReward, nextState: nextSv });
       }
     }
 
-    // --- 5. Overcrowding penalty (smooth, not spiked) ---
+    // ── 5. Smooth overcrowding penalty ───────────────────────────────────────
     const totalWaiting = s.zones.reduce((sum, z) => sum + z.waitingPassengers, 0);
     stepReward -= totalWaiting * 0.2;
 
-    // --- 6. Episode end: decay epsilon, reset queues ---
+    // ── 6. Episode end: decay ε, soft-reset queues ───────────────────────────
     if (isEpisodeEnd) {
-      dispatcher.decayEpsilon();
-      // Soft reset: clear waiting passengers but keep Q-table & taxis
-      for (const zone of s.zones) zone.waitingPassengers = poissonSample(zone.demand * 0.3);
+      agent.decayEpsilon();
+      for (const zone of s.zones) {
+        zone.waitingPassengers = poissonSample(zone.demand * 0.3);
+      }
       for (const taxi of s.taxis) {
         if (taxi.status !== "carrying_passenger") {
-          taxi.status = "idle";
-          taxi.destinationZone = null;
+          taxi.status            = "idle";
+          taxi.destinationZone   = null;
           taxi.tripTimeRemaining = null;
-          taxi.lastAction = "episode_reset";
+          taxi.lastAction        = "episode_reset";
         }
       }
     }
 
     updateCounts(s.zones, s.taxis);
 
+    // ── 7. Update metrics & history ──────────────────────────────────────────
     const activeTaxis = s.taxis.filter(t => t.status === "carrying_passenger").length;
-    s.metrics.utilizationRate = Math.round((activeTaxis / s.taxis.length) * 1000) / 10;
-    s.metrics.averageWaitTime = Math.round((totalWaiting / s.zones.length) * 10) / 10;
-    s.metrics.totalReward += stepReward;
+    s.metrics.utilizationRate =
+      Math.round((activeTaxis / s.taxis.length) * 1000) / 10;
+    s.metrics.averageWaitTime =
+      Math.round((totalWaiting / s.zones.length) * 10) / 10;
+    s.metrics.totalReward   += stepReward;
     s.metrics.episodeReward += stepReward;
 
-    const predAcc = Math.round((totalPredError / s.zones.length) * 1000) / 1000;
-    const avgQ = Math.round(dispatcher.avgQ() * 100) / 100;
-    const episodeNumber = Math.floor(s.metrics.timeStep / EPISODE_LENGTH) + 1;
+    const predAcc     = Math.round((totalPredAcc / s.zones.length) * 1000) / 1000;
+    const avgQ        = Math.round(agent.avgQ() * 100) / 100;
+    const episodeNum  = Math.floor(s.metrics.timeStep / EPISODE_LENGTH) + 1;
 
     s.rlAnalytics = {
-      epsilon: Math.round(dispatcher.epsilon * 1000) / 1000,
-      replayBufferSize: dispatcher.bufferSize,
-      episodeNumber,
-      avgQValue: avgQ,
-      predictionAccuracy: predAcc,
-      totalQUpdates: dispatcher.totalQUpdates,
+      epsilon:           Math.round(agent.epsilon        * 1000) / 1000,
+      replayBufferSize:  agent.bufferSize,
+      episodeNumber:     episodeNum,
+      avgQValue:         avgQ,
+      predictionAccuracy:predAcc,
+      totalQUpdates:     agent.totalQUpdates,
     };
 
-    if (s.history.length >= 200) s.history = s.history.slice(s.history.length - 200);
+    if (s.history.length >= 200) s.history = s.history.slice(-200);
     s.history.push({
-      timeStep: s.metrics.timeStep,
-      tripsCompleted: s.metrics.totalTripsCompleted,
-      revenue: Math.round(s.metrics.totalRevenue * 100) / 100,
-      utilizationRate: s.metrics.utilizationRate,
-      waitTime: s.metrics.averageWaitTime,
-      reward: Math.round(stepReward * 10) / 10,
-      episodeReward: Math.round(s.metrics.episodeReward * 10) / 10,
-      avgQValue: avgQ,
-      epsilon: Math.round(dispatcher.epsilon * 1000) / 1000,
-      predictionAccuracy: predAcc,
+      timeStep:          s.metrics.timeStep,
+      tripsCompleted:    s.metrics.totalTripsCompleted,
+      revenue:           Math.round(s.metrics.totalRevenue * 100) / 100,
+      utilizationRate:   s.metrics.utilizationRate,
+      waitTime:          s.metrics.averageWaitTime,
+      reward:            Math.round(stepReward  * 10) / 10,
+      episodeReward:     Math.round(s.metrics.episodeReward * 10) / 10,
+      avgQValue:         avgQ,
+      epsilon:           Math.round(agent.epsilon * 1000) / 1000,
+      predictionAccuracy:predAcc,
     });
   }
 
