@@ -137,7 +137,7 @@ export class RLAgent {
   private replayBuf   = new ReplayBuffer();
   private stepsSinceReplay = 0;
 
-  epsilon      = RL_CONFIG.epsilonInit;
+  epsilon: number = RL_CONFIG.epsilonInit;
   totalQUpdates = 0;
 
   // ── Bellman batch update ────────────────────────────────────────────────────
@@ -176,12 +176,12 @@ export class RLAgent {
     const sv = buildStateVec(taxi.row, taxi.col, gridSize, zones, false);
 
     // Neighbor helper (inline, no simulation import needed)
-    const neighborCells: { row: number; col: number; action: ActionKey }[] = [
-      { row: taxi.row - 1, col: taxi.col,     action: "north" },
-      { row: taxi.row + 1, col: taxi.col,     action: "south" },
-      { row: taxi.row,     col: taxi.col - 1, action: "west"  },
-      { row: taxi.row,     col: taxi.col + 1, action: "east"  },
-    ].filter(n =>
+    const neighborCells = ([
+      { row: taxi.row - 1, col: taxi.col,     action: "north" as ActionKey },
+      { row: taxi.row + 1, col: taxi.col,     action: "south" as ActionKey },
+      { row: taxi.row,     col: taxi.col - 1, action: "west"  as ActionKey },
+      { row: taxi.row,     col: taxi.col + 1, action: "east"  as ActionKey },
+    ] as { row: number; col: number; action: ActionKey }[]).filter(n =>
       n.row >= 0 && n.row < gridSize &&
       n.col >= 0 && n.col < gridSize
     );

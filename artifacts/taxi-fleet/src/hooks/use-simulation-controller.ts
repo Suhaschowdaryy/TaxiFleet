@@ -21,6 +21,7 @@ export function useSimulationController() {
   } = useGetSimulationState({
     query: {
       staleTime: 1000,
+      queryKey: getGetSimulationStateQueryKey(),
     }
   });
 
