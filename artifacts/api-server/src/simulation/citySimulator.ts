@@ -340,7 +340,7 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
         // 2. Future demand alignment bonus (capped at +4.0).
         //    Movement toward the best zone earns +4.0 max — well below the
         //    +20 pickup reward so the agent always prefers actual pickups.
-        const futureDemandBonus = normalizedDemand * 4.0;
+        const futureDemandBonus = normalizedDemand * 3.5;
         //
         // 3. Hard low-demand penalty: strongly discourage parking in dead zones
         //    that have no current passengers and negligible predicted demand.
@@ -355,8 +355,9 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
         const gradientPenalty = (1 - normalizedDemand) * 2.0;
         //
         // 5. Directional penalty: discourage moves that lead to a zone with
-        //    lower predicted demand than the best available neighbor of the
-        //    origin. Teaches gradient-following without hard heuristics.
+        //    meaningfully lower predicted demand than the best available neighbor
+        //    of the origin. A 0.1 tolerance filters out prediction noise so
+        //    near-equal choices are not punished.
         const moved = oldRow !== taxi.row || oldCol !== taxi.col;
         let directionalPenalty = 0;
         if (moved) {
@@ -365,10 +366,15 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
               .filter(([r,c]) => r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE)
               .map(([r,c]) => s.zones[zi(r as number, c as number)].predictedDemand)),
           );
-          if (destZone.predictedDemand < bestNeighborDemand) directionalPenalty = -1;
+          if (destZone.predictedDemand < bestNeighborDemand - 0.1) directionalPenalty = -1;
         }
         //
-        // 6. Idle penalty: -5 total (-1 time + -4 here) when staying put
+        // 6. Passive positioning reward: if the taxi is already in a high-demand
+        //    zone (top 30% of grid demand) reward staying put with a small bonus.
+        //    Prevents premature departure from well-positioned zones.
+        const positioningBonus = normalizedDemand > 0.7 ? 1 : 0;
+        //
+        // 7. Idle penalty: -5 total (-1 time + -4 here) when staying put
         //    while passengers are waiting in other zones.
         let idlePenalty = 0;
         if (decision.action === "stay") {
@@ -380,7 +386,7 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
 
         const moveReward =
           timePenalty + futureDemandBonus + lowDemandPenalty
-          - gradientPenalty + directionalPenalty + idlePenalty;
+          - gradientPenalty + directionalPenalty + positioningBonus + idlePenalty;
         stepReward += moveReward;
 
         const nextSv = buildStateVec(taxi.row, taxi.col, GRID_SIZE, s.zones, false);

@@ -1,0 +1,62 @@
+You are refining a Q-learning based taxi dispatch RL agent that already uses normalized rewards, capped movement incentives, and gradient-based penalties. The system is stable but needs final tuning to prevent subtle inefficiencies and improve convergence.
+
+Apply the following targeted improvements:
+
+1. Slightly Reduce Movement Reward (Prevent Over-Repositioning)
+
+* Current:
+  `futureDemandBonus = normalizedDemand * 4.0`
+* Problem: Movement to the best zone (~+3 net reward) is slightly too attractive
+* Fix:
+  `futureDemandBonus = normalizedDemand * 3.5`
+* Goal: Ensure pickup (+20) remains clearly dominant and prevent excessive repositioning
+
+2. Add Tolerance to Directional Penalty (Handle Noise Robustly)
+
+* Current:
+  Penalizes any move where destination demand < best neighbor demand
+* Problem: Sensitive to small prediction noise
+* Fix:
+  Apply penalty only if difference is meaningful:
+  `if destDemand < bestNeighborDemand - 0.1 → reward -= 1`
+* Goal: Avoid punishing near-equal or acceptable moves
+
+3. Add Passive Reward for Good Positioning (Encourage Smart Waiting)
+
+* Problem: Agent may leave high-demand zones prematurely
+* Fix:
+  If taxi is idle AND current zone has high demand:
+  `if normalizedDemand > 0.7 → reward += 1`
+* Goal: Reward being correctly positioned before pickup occurs
+
+4. Maintain Reward Balance Constraints
+   Ensure the following hierarchy remains intact:
+
+* Pickup: +20 (highest priority)
+* Movement (best case): ~+2 to +2.5
+* Neutral/mid movement: near 0
+* Bad movement: strongly negative
+* Dead zones: heavily penalized (-10 or lower)
+
+5. Do NOT Introduce New Heuristics
+
+* Do NOT add domainScore, rebalancingScore, or similar logic
+* All improvements must remain within reward shaping
+* RL must remain the sole decision driver
+
+6. Validate Reward Consistency
+   After changes, verify:
+
+* Reward values remain bounded and stable
+* No action unintentionally exceeds pickup reward
+* Movement does not dominate long-term policy
+
+Goal:
+Finalize a stable, efficient RL agent that:
+
+* avoids unnecessary movement
+* handles noisy demand predictions robustly
+* learns to wait strategically in high-value zones
+* converges faster with clean reward signals
+
+Focus on precision and stability — do not overcomplicate the system.
