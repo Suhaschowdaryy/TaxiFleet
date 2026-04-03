@@ -157,7 +157,7 @@ function createTaxis(): Taxi[] {
     tripsCompleted: 0, revenue: 0,
     lastAction: "initialized",
     destinationZone: null, tripTimeRemaining: null,
-    debugInfo: null,
+    debugInfo: null, stepsInSameZone: 0,
   }));
 }
 
@@ -349,10 +349,11 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
             ? -10
             : 0;
         //
-        // 4. Gradient penalty (normalized, reduced from 0.5 → 0.3 scalar).
-        //    Provides smooth directional guidance without over-penalizing
-        //    mid-tier zones.  Penalty = 0 at best zone, max 2.0 at worst.
-        const gradientPenalty = (1 - normalizedDemand) * 2.0;
+        // 4. Gradient penalty (normalized). Scalar tuned to 1.5 so that a
+        //    mid-demand zone (normalizedDemand = 0.5) produces exactly 0 net:
+        //    −1 + (0.5 × 3.5) − (0.5 × 1.5) = 0. Penalty = 0 at best zone,
+        //    max 1.5 at worst zone (well below the dead-zone hard penalty).
+        const gradientPenalty = (1 - normalizedDemand) * 1.5;
         //
         // 5. Directional penalty: discourage moves that lead to a zone with
         //    meaningfully lower predicted demand than the best available neighbor
@@ -369,10 +370,11 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
           if (destZone.predictedDemand < bestNeighborDemand - 0.1) directionalPenalty = -1;
         }
         //
-        // 6. Passive positioning reward: if the taxi is already in a high-demand
-        //    zone (top 30% of grid demand) reward staying put with a small bonus.
-        //    Prevents premature departure from well-positioned zones.
-        const positioningBonus = normalizedDemand > 0.7 ? 1 : 0;
+        // 6. Passive positioning reward: +1 for being in a high-demand zone
+        //    (top 30% of grid), but only for the first 3 consecutive steps there.
+        //    After that the bonus expires so the agent cannot farm it by camping.
+        const stepsHere = taxi.stepsInSameZone;
+        const positioningBonus = normalizedDemand > 0.7 && stepsHere <= 3 ? 1 : 0;
         //
         // 7. Idle penalty: -5 total (-1 time + -4 here) when staying put
         //    while passengers are waiting in other zones.
@@ -391,6 +393,9 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
 
         const nextSv = buildStateVec(taxi.row, taxi.col, GRID_SIZE, s.zones, false);
         agent.learn({ state: prevSv, action: decision.action, reward: moveReward, nextState: nextSv });
+
+        // Update same-zone streak: reset on move, increment on stay
+        taxi.stepsInSameZone = moved ? 0 : stepsHere + 1;
       }
     }
 

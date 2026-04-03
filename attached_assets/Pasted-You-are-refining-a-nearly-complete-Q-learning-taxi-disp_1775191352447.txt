@@ -1,0 +1,73 @@
+You are refining a nearly-complete Q-learning taxi dispatch RL agent. The reward system is stable and well-shaped, but two small issues remain: slight camping bias in high-demand zones and a mildly discouraging signal for mid-demand zones.
+
+Apply only the following minimal fixes. Do not change anything else.
+
+1. Prevent Camping Bias in High-Demand Zones
+
+* Current:
+  `positioningBonus = +1` when `normalizedDemand > 0.7`
+
+* Problem: Agent may stay indefinitely in high-demand zones to repeatedly collect reward
+
+* Fix (choose ONE simple method):
+
+  Option A (recommended — step limit):
+
+  * Track consecutive steps in the same zone
+  * Apply positioning bonus only for first 2–3 steps
+  * After that, bonus = 0
+
+  Example:
+  `if normalizedDemand > 0.7 AND stepsInSameZone <= 3 → reward += 1`
+
+  Option B (alternative — decay):
+
+  * Gradually reduce bonus over time in same zone
+    `positioningBonus = 1 / (1 + stepsInSameZone)`
+
+* Goal: Encourage smart positioning without allowing reward farming
+
+2. Make Mid-Demand Zones Truly Neutral
+
+* Current: mid zones (~normalizedDemand = 0.5) produce slightly negative reward (~ -0.25)
+
+* Problem: Discourages exploration and slows learning
+
+* Fix: Adjust movement reward scaling so that:
+  `normalizedDemand ≈ 0.5 → net reward ≈ 0`
+
+* Implementation hint:
+  Slightly rebalance either:
+
+  * movement bonus multiplier (e.g., 3.5 → 3.8)
+    OR
+  * gradient penalty scaling (e.g., 2.0 → 1.8)
+
+* Constraint:
+
+  * Do NOT increase best-zone reward above ~+3
+  * Do NOT reduce dead-zone penalty
+
+* Goal:
+  Ensure:
+
+  * best zones → clearly positive
+  * mid zones → neutral (~0)
+  * bad zones → negative
+
+3. Do NOT Modify Anything Else
+
+* Keep:
+
+  * pickup reward (+20)
+  * dead-zone penalty (~ -10)
+  * directional penalty
+  * normalization
+  * Q-value scaling
+
+* Do NOT reintroduce heuristics
+
+* Do NOT change overall reward structure
+
+Goal:
+Eliminate camping behavior and improve exploration while preserving the current stable and well-balanced RL system.

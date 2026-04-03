@@ -35,6 +35,7 @@ export interface Taxi {
   destinationZone: string | null;
   tripTimeRemaining: number | null;
   debugInfo: TaxiDebugInfo | null;
+  stepsInSameZone: number;
 }
 
 export interface RLAnalytics {
