@@ -99,11 +99,6 @@ function tripDuration(
   return Math.max(1, Math.round(dist * (1 + traffic)));
 }
 
-/** Compute a zone's combined demand score (used for reward shaping). */
-function demandScore(zone: Zone): number {
-  return zone.waitingPassengers + zone.predictedDemand * 0.7;
-}
-
 // ─── EMA Demand Predictor ────────────────────────────────────────────────────
 class DemandPredictor {
   private history = new Map<string, number[]>();
@@ -266,12 +261,11 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
           taxi.revenue += fare;
           s.metrics.totalTripsCompleted++;
           s.metrics.totalRevenue += fare;
-          taxi.status        = "idle";
+          taxi.status            = "idle";
           taxi.destinationZone   = null;
           taxi.tripTimeRemaining = null;
-          taxi.lastAction    = "delivered_passenger";
-          stepReward += 10;
-          // No Q-update on delivery — reward was credited at pickup time.
+          taxi.lastAction        = "delivered_passenger";
+          stepReward += 5; // small delivery completion credit (metrics only)
         }
         continue;
       }
@@ -280,13 +274,13 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
       const prevSv   = buildStateVec(taxi.row, taxi.col, GRID_SIZE, s.zones, false);
       const decision = agent.dispatch(taxi, s.zones, GRID_SIZE, targetCounts);
 
-      taxi.debugInfo = decision.debug; // always populated; UI toggles display
+      taxi.debugInfo = decision.debug;
 
-      // ── 4c. Execute action ─────────────────────────────────────────────────
+      // ── 4c. Execute action & compute reward ────────────────────────────────
       if (decision.action === "pickup") {
         const z = s.zones[zi(taxi.row, taxi.col)];
+
         if (z.waitingPassengers > 0) {
-          const queueBefore   = z.waitingPassengers; // capture before decrement
           z.waitingPassengers--;
           const destRow = Math.floor(Math.random() * GRID_SIZE);
           const destCol = Math.floor(Math.random() * GRID_SIZE);
@@ -297,27 +291,29 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
           taxi.tripTimeRemaining = duration;
           taxi.lastAction        = "picked_up_passenger";
 
-          const reward = queueBefore >= 3 ? 15 : 10;
+          // +20 for successful pickup — the dominant positive reward signal
+          const reward = 20;
           stepReward  += reward;
 
-          // nextState: post-pickup (idle taxis only query Q; occupied=false)
           const nextSv = buildStateVec(taxi.row, taxi.col, GRID_SIZE, s.zones, false);
           agent.learn({ state: prevSv, action: "pickup", reward, nextState: nextSv });
 
         } else {
+          // Failed pickup attempt (no passengers here)
           taxi.lastAction = "wait_no_passengers";
-          stepReward -= 1;
-          agent.learn({ state: prevSv, action: "pickup", reward: -1, nextState: prevSv });
+          const reward = -2;
+          stepReward += reward;
+          agent.learn({ state: prevSv, action: "pickup", reward, nextState: prevSv });
         }
 
       } else {
         // Movement or stay
         const oldRow = taxi.row, oldCol = taxi.col;
-        taxi.row       = decision.row;
-        taxi.col       = decision.col;
+        taxi.row        = decision.row;
+        taxi.col        = decision.col;
         taxi.lastAction = decision.action;
 
-        // Update live target counts to prevent cascading crowding
+        // Update live target counts
         const newIdx = zi(taxi.row, taxi.col);
         targetCounts.set(newIdx, (targetCounts.get(newIdx) ?? 0) + 1);
         if (oldRow !== taxi.row || oldCol !== taxi.col) {
@@ -325,24 +321,46 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
           targetCounts.set(oldIdx, Math.max(0, (targetCounts.get(oldIdx) ?? 1) - 1));
         }
 
-        // Proportional reward shaping: reward moving toward demand
-        const moved    = oldRow !== taxi.row || oldCol !== taxi.col;
-        const oldScore = demandScore(s.zones[zi(oldRow, oldCol)]);
-        const newScore = demandScore(s.zones[zi(taxi.row, taxi.col)]);
-        const delta    = newScore - oldScore;
+        const destZone = s.zones[zi(taxi.row, taxi.col)];
 
-        let moveReward = moved ? delta * 0.5 : -0.2;
-        moveReward     = Math.max(-2, Math.min(3, moveReward));
-        stepReward    += moveReward;
+        // ── Reward design: RL-driven, minimal heuristics ─────────────────
+        //
+        // 1. Time-step cost: penalise every step to encourage urgency
+        const timePenalty = -1;
+        //
+        // 2. Future demand alignment bonus: reward pre-positioning toward
+        //    zones with high predicted demand (forward-looking signal).
+        //    This teaches the agent to reposition before demand spikes.
+        const futureDemandBonus = destZone.predictedDemand * 0.5;
+        //
+        // 3. Low-demand penalty: strongly discourage parking in dead zones
+        //    that have no current passengers and negligible predicted demand.
+        const lowDemandPenalty =
+          destZone.predictedDemand < 1.5 && destZone.waitingPassengers === 0
+            ? -10
+            : 0;
+        //
+        // 4. Idle penalty: -5 total (-1 time + -4 here) when staying put
+        //    while passengers are waiting in other zones.
+        let idlePenalty = 0;
+        if (decision.action === "stay") {
+          const passengersElsewhere = s.zones.some(
+            z => !(z.row === taxi.row && z.col === taxi.col) && z.waitingPassengers > 0,
+          );
+          if (passengersElsewhere) idlePenalty = -4;
+        }
+
+        const moveReward =
+          timePenalty + futureDemandBonus + lowDemandPenalty + idlePenalty;
+        stepReward += moveReward;
 
         const nextSv = buildStateVec(taxi.row, taxi.col, GRID_SIZE, s.zones, false);
         agent.learn({ state: prevSv, action: decision.action, reward: moveReward, nextState: nextSv });
       }
     }
 
-    // ── 5. Smooth overcrowding penalty ───────────────────────────────────────
+    // ── 5. Track waiting passengers for metrics ───────────────────────────────
     const totalWaiting = s.zones.reduce((sum, z) => sum + z.waitingPassengers, 0);
-    stepReward -= totalWaiting * 0.2;
 
     // ── 6. Episode end: decay ε, soft-reset queues ───────────────────────────
     if (isEpisodeEnd) {

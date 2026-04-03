@@ -8,7 +8,7 @@
  *   createRLAgent()  → RLAgent
  *
  * RLAgent:
- *   dispatch(taxi, zones, targetCounts) → { row, col, action, debug }
+ *   dispatch(taxi, zones, gridSize, targetCounts) → { row, col, action, debug }
  *   learn(transition)
  *   decayEpsilon()
  *   epsilon, bufferSize, totalQUpdates, avgQ()
@@ -18,13 +18,13 @@ import { Zone, Taxi, TaxiDebugInfo } from "../simulation/types";
 
 // ─── Hyperparameters ──────────────────────────────────────────────────────────
 export const RL_CONFIG = {
-  alpha:         0.1,    // learning rate
-  gamma:         0.95,   // discount factor
-  batchSize:     32,     // replay mini-batch size
-  replayCapacity:10_000, // max transitions stored
-  epsilonInit:   0.3,    // starting exploration rate
-  epsilonDecay:  0.995,  // per-episode multiplier
-  epsilonMin:    0.05,   // floor
+  alpha:          0.15,   // learning rate (slightly higher for faster convergence)
+  gamma:          0.95,   // discount factor
+  batchSize:      32,     // replay mini-batch size
+  replayCapacity: 10_000, // max transitions stored
+  epsilonInit:    0.3,    // starting exploration rate
+  epsilonDecay:   0.995,  // per-episode multiplier
+  epsilonMin:     0.05,   // floor
 } as const;
 
 // ─── Action space ─────────────────────────────────────────────────────────────
@@ -35,11 +35,11 @@ export const ALL_ACTIONS: ActionKey[] = [
 
 // ─── State representation ─────────────────────────────────────────────────────
 export interface StateVec {
-  zoneIdx:        number; // 0–24
-  demandBucket:   number; // 0–3  (waiting passengers, discretized)
-  predictedBucket:number; // 0–3  (EMA predicted demand, discretized)
-  trafficBucket:  number; // 0–2  (traffic level, discretized)
-  occupied:       number; // 0|1
+  zoneIdx:         number; // 0–24
+  demandBucket:    number; // 0–3  (waiting passengers, discretized)
+  predictedBucket: number; // 0–3  (EMA predicted demand, discretized)
+  trafficBucket:   number; // 0–2  (traffic level, discretized)
+  occupied:        number; // 0|1
 }
 
 export interface Transition {
@@ -133,12 +133,12 @@ export interface DispatchResult {
 }
 
 export class RLAgent {
-  private qTable      = new QTable();
-  private replayBuf   = new ReplayBuffer();
+  private qTable       = new QTable();
+  private replayBuf    = new ReplayBuffer();
   private stepsSinceReplay = 0;
 
-  epsilon: number = RL_CONFIG.epsilonInit;
-  totalQUpdates = 0;
+  epsilon: number      = RL_CONFIG.epsilonInit;
+  totalQUpdates        = 0;
 
   // ── Bellman batch update ────────────────────────────────────────────────────
   learn(t: Transition) {
@@ -166,7 +166,13 @@ export class RLAgent {
     }
   }
 
-  // ── Epsilon-greedy dispatch ─────────────────────────────────────────────────
+  // ── Q-value dominant dispatch ───────────────────────────────────────────────
+  //
+  // Decisions are primarily driven by learned Q-values (weight 2.0).
+  // The only heuristic retained is a small pickup nudge to help early
+  // exploration converge faster toward the high-reward pickup action.
+  // Everything else (demand scores, rebalancing bonuses, crowd penalties)
+  // has been removed — the agent learns all of that through rewards.
   dispatch(
     taxi:         Taxi,
     zones:        Zone[],
@@ -175,7 +181,7 @@ export class RLAgent {
   ): DispatchResult {
     const sv = buildStateVec(taxi.row, taxi.col, gridSize, zones, false);
 
-    // Neighbor helper (inline, no simulation import needed)
+    // Build candidate actions (valid neighbors + stay + pickup)
     const neighborCells = ([
       { row: taxi.row - 1, col: taxi.col,     action: "north" as ActionKey },
       { row: taxi.row + 1, col: taxi.col,     action: "south" as ActionKey },
@@ -186,43 +192,31 @@ export class RLAgent {
       n.col >= 0 && n.col < gridSize
     );
 
-    // Candidates: stay, pickup (same cell), movement neighbors
     const candidates: { row: number; col: number; action: ActionKey }[] = [
       { row: taxi.row, col: taxi.col, action: "stay"   },
       { row: taxi.row, col: taxi.col, action: "pickup" },
       ...neighborCells,
     ];
 
-    // Score each candidate
+    // Score each candidate: Q-value is the dominant factor.
+    // The tiny pickupNudge (max 3.0) only matters in early exploration when
+    // Q-values are all near 0 — once the agent accumulates experience,
+    // Q-values dwarf this nudge.
     const scored = candidates.map(c => {
-      const z      = zones[c.row * gridSize + c.col];
-      const supply = targetCounts.get(c.row * gridSize + c.col) ?? 0;
+      const z          = zones[c.row * gridSize + c.col];
+      const qv         = this.qTable.get(sv, c.action);
+      const pickupNudge =
+        c.action === "pickup" && z.waitingPassengers > 0 ? 3.0 : 0;
 
-      // Pickup bonus/penalty based on real-time queue
-      let actionScore = 0;
-      if (c.action === "pickup") {
-        actionScore = z.waitingPassengers > 0
-          ? 10 + z.waitingPassengers * 2
-          : -5;
-      }
+      const totalScore = qv * 2.0 + pickupNudge;
 
-      // Multi-agent coordination: discourage crowding
-      const crowdPenalty = supply > 3 ? -5 * (supply - 2) : 0;
-
-      // Supply–demand rebalancing
-      const rebalScore =
-        0.6 * z.predictedDemand - 0.3 * supply + crowdPenalty;
-
-      // Q(s, a) — current state sv, not destination state
-      const qv = this.qTable.get(sv, c.action);
-
-      const domainScore =
-        z.predictedDemand * (1 + 0.3 * z.trafficLevel) +
-        z.waitingPassengers * 2;
-
-      const totalScore = domainScore + qv * 0.4 + rebalScore + actionScore;
-
-      return { ...c, totalScore, qv, domainScore, rebalScore };
+      return {
+        ...c,
+        totalScore,
+        qv,
+        predictedDemand: z.predictedDemand,
+        futureDemandBonus: z.predictedDemand * 0.5,
+      };
     });
 
     // Epsilon-greedy selection
@@ -240,11 +234,11 @@ export class RLAgent {
       col:    chosen.col,
       action: chosen.action,
       debug: {
-        chosenAction:    chosen.action,
-        qValue:          Math.round(chosen.qv          * 100) / 100,
-        demandScore:     Math.round(chosen.domainScore * 100) / 100,
-        rebalancingScore:Math.round(chosen.rebalScore  * 100) / 100,
-        stateKey:        stateKey(sv),
+        chosenAction:     chosen.action,
+        qValue:           Math.round(chosen.qv               * 100) / 100,
+        demandScore:      Math.round(chosen.predictedDemand   * 100) / 100,
+        rebalancingScore: Math.round(chosen.futureDemandBonus * 100) / 100,
+        stateKey:         stateKey(sv),
       },
     };
   }
