@@ -260,9 +260,6 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
     let stepMovementReward = 0;
     let stepDeliveryReward = 0;
 
-    // Max predicted demand across all zones — used for demand normalization
-    const maxDemandInGrid = Math.max(...s.zones.map(z => z.predictedDemand));
-
     // ── 4. Step each taxi ──────────────────────────────────────────────────────
     for (const taxi of s.taxis) {
 
@@ -283,8 +280,7 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
           taxi.tripTimeRemaining = null;
           taxi.lastAction        = "delivered_passenger";
 
-          // FIX: Delivery reward increased to +10 (was +5) AND agent now learns
-          // from it so it understands completing trips has value.
+          // +10 delivery completion reward — agent learns trip completion matters.
           const deliveryReward = 10;
           stepReward         += deliveryReward;
           stepDeliveryReward += deliveryReward;
@@ -316,7 +312,7 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
           taxi.tripTimeRemaining = duration;
           taxi.lastAction        = "picked_up_passenger";
 
-          // +20 for successful pickup — dominant positive signal
+          // +20 for successful pickup — the primary learning signal.
           const reward = 20;
           stepReward       += reward;
           stepPickupReward += reward;
@@ -325,7 +321,7 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
           agent.learn({ state: prevSv, action: "pickup", reward, nextState: nextSv });
 
         } else {
-          // Failed pickup attempt (no passengers here)
+          // Failed pickup — agent learns NOT to try pickup in empty zones.
           taxi.lastAction = "wait_no_passengers";
           const reward = -2;
           stepReward       += reward;
@@ -334,7 +330,7 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
         }
 
       } else {
-        // Movement or stay
+        // ── Movement or stay ────────────────────────────────────────────────
         const oldRow = taxi.row, oldCol = taxi.col;
         taxi.row        = decision.row;
         taxi.col        = decision.col;
@@ -348,57 +344,19 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
           targetCounts.set(oldIdx, Math.max(0, (targetCounts.get(oldIdx) ?? 1) - 1));
         }
 
-        const destZone = s.zones[zi(taxi.row, taxi.col)];
-
-        // ── Corrected reward design ──────────────────────────────────────────
+        // ── Pure RL reward — zero hardcoded demand heuristics ──────────────
         //
-        // normalizedDemand ∈ [0, 1] — 1.0 at the best zone in the grid.
-        const normalizedDemand =
-          maxDemandInGrid > 0 ? destZone.predictedDemand / maxDemandInGrid : 0;
+        // All demand-based shaping (futureDemandBonus, lowDemandPenalty,
+        // gradientPenalty, directionalPenalty) is removed. The agent must
+        // discover through Q-learning which zones lead to +20 pickups.
         //
-        // 1. Time-step cost: always pay -1 per step to encourage urgency.
+        // Only two signals remain:
+        //   1. Time penalty: every step costs -1 (discourages aimless wandering)
+        //   2. Idle penalty: -4 extra for staying still while passengers wait
+        //      anywhere else (prevents the agent from parking indefinitely)
+        //      The agent learns WHERE to go; we only enforce THAT it should go.
         const timePenalty = -1;
-        //
-        // 2. Future demand alignment bonus.
-        //    FIX: Reduced from 3.5 → 1.0.
-        //    At the best zone: -1 + 1.0 = 0 net (neutral, not profitable).
-        //    Movement is now a cost unless it leads to an actual pickup.
-        //    Previously 3.5 made positioning alone worth +2.5/step → reward inflation.
-        const futureDemandBonus = normalizedDemand * 1.0;
-        //
-        // 3. Low-demand hard penalty.
-        //    FIX: Reduced from -10 → -5 to reduce asymmetry, still discourages
-        //    parking in dead zones with no passengers.
-        const lowDemandPenalty =
-          destZone.predictedDemand < 1.5 && destZone.waitingPassengers === 0
-            ? -5
-            : 0;
-        //
-        // 4. Gradient penalty.
-        //    FIX: Multiplier reduced from 1.5 → 0.5 to balance with futureDemandBonus.
-        //    At mid-demand zone (normalizedDemand = 0.5): -1 + 0.5 - 0.25 = -0.75 net.
-        const gradientPenalty = (1 - normalizedDemand) * 0.5;
-        //
-        // 5. Directional penalty: discourage moves to a meaningfully worse neighbor.
-        const moved = oldRow !== taxi.row || oldCol !== taxi.col;
-        let directionalPenalty = 0;
-        if (moved) {
-          const bestNeighborDemand = Math.max(
-            ...([ [oldRow-1,oldCol],[oldRow+1,oldCol],[oldRow,oldCol-1],[oldRow,oldCol+1] ]
-              .filter(([r,c]) => r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE)
-              .map(([r,c]) => s.zones[zi(r as number, c as number)].predictedDemand)),
-          );
-          if (destZone.predictedDemand < bestNeighborDemand - 0.1) directionalPenalty = -1;
-        }
-        //
-        // 6. Positioning bonus — REMOVED.
-        //    Previously +1 for being in a top-demand zone for ≤3 steps.
-        //    This could be farmed by oscillating between two adjacent high-demand
-        //    zones (resetting stepsInSameZone each time → infinite free +1s).
-        //    Now set to 0; the agent must earn reward through actual pickups.
-        //
-        // 7. Idle penalty: -5 total (-1 time + -4 here) when staying put
-        //    while passengers are waiting elsewhere.
+
         let idlePenalty = 0;
         if (decision.action === "stay") {
           const passengersElsewhere = s.zones.some(
@@ -407,18 +365,14 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
           if (passengersElsewhere) idlePenalty = -4;
         }
 
-        const moveReward =
-          timePenalty + futureDemandBonus + lowDemandPenalty
-          - gradientPenalty + directionalPenalty + idlePenalty;
-
+        const moveReward = timePenalty + idlePenalty;
         stepReward         += moveReward;
         stepMovementReward += moveReward;
 
         const nextSv = buildStateVec(taxi.row, taxi.col, GRID_SIZE, s.zones, false);
         agent.learn({ state: prevSv, action: decision.action, reward: moveReward, nextState: nextSv });
 
-        // Update same-zone streak: reset on move, increment on stay
-        taxi.stepsInSameZone = moved ? 0 : taxi.stepsInSameZone + 1;
+        taxi.stepsInSameZone = decision.action === "stay" ? taxi.stepsInSameZone + 1 : 0;
       }
     }
 
@@ -450,7 +404,9 @@ export function stepSimulation(state: SimulationState, steps = 1): SimulationSta
     s.metrics.averageWaitTime =
       Math.round((totalWaiting / s.zones.length) * 10) / 10;
     s.metrics.totalReward   += stepReward;
-    s.metrics.episodeReward += stepReward;
+    // Normalize by fleet size so episodeReward represents per-taxi performance.
+    // A value of 0 means the fleet broke even; positive means net profit per taxi.
+    s.metrics.episodeReward += stepReward / NUM_TAXIS;
 
     const predAcc    = Math.round((totalPredAcc / s.zones.length) * 1000) / 1000;
     const avgQ       = Math.round(agent.avgQ() * 100) / 100;

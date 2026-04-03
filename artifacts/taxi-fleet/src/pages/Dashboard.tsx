@@ -141,7 +141,7 @@ export default function Dashboard() {
             colorClass="border-amber-500"
           />
           <StatCard
-            title="Episode Reward"
+            title="Ep Reward / Taxi"
             value={metrics.episodeReward > 0 ? `+${Math.round(metrics.episodeReward)}` : `${Math.round(metrics.episodeReward)}`}
             icon={<BrainCircuit className="w-5 h-5" />}
             colorClass={metrics.episodeReward >= 0 ? "border-emerald-400" : "border-red-400"}
