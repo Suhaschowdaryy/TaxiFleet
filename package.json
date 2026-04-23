@@ -6,9 +6,9 @@
     "dev": "concurrently --kill-others-on-fail -n \"api,web\" -c \"blue,green\" \"pnpm --filter @workspace/api-server dev\" \"pnpm --filter @workspace/taxi-fleet dev\"",
     "dev:api": "pnpm --filter @workspace/api-server dev",
     "dev:web": "pnpm --filter @workspace/taxi-fleet dev",
-    "build": "pnpm run typecheck && pnpm -r --if-present run build",
+    "build": "pnpm run typecheck && pnpm --filter @workspace/api-server --if-present run build && pnpm --filter @workspace/taxi-fleet --if-present run build",
     "typecheck:libs": "tsc --build",
-    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --if-present run typecheck"
+    "typecheck": "pnpm run typecheck:libs && pnpm --filter @workspace/api-server --if-present run typecheck && pnpm --filter @workspace/taxi-fleet --if-present run typecheck"
   },
   "private": true,
   "devDependencies": {

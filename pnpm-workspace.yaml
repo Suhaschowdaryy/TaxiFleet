@@ -1,8 +1,8 @@
 packages:
-  - artifacts/*
+  - artifacts/api-server
+  - artifacts/taxi-fleet
   - lib/*
   - lib/integrations/*
-  - scripts
 
 autoInstallPeers: false
 
