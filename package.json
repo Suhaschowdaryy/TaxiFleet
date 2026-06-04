@@ -7,10 +7,14 @@
     "dev:api": "pnpm --filter @workspace/api-server dev",
     "dev:web": "pnpm --filter @workspace/taxi-fleet dev",
     "build": "pnpm run typecheck && pnpm --filter @workspace/api-server --if-present run build && pnpm --filter @workspace/taxi-fleet --if-present run build",
-    "typecheck:libs": "tsc --build",
+    "vercel-build": "pnpm --filter @workspace/taxi-fleet build",
+    "typecheck:libs": "node ./scripts/typecheck-wrapper.cjs",
     "typecheck": "pnpm run typecheck:libs && pnpm --filter @workspace/api-server --if-present run typecheck && pnpm --filter @workspace/taxi-fleet --if-present run typecheck"
   },
   "private": true,
+  "engines": {
+    "node": "18.x"
+  },
   "devDependencies": {
     "concurrently": "^9.1.2",
     "typescript": "~5.9.2",
