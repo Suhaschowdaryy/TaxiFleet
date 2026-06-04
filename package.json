@@ -6,7 +6,7 @@
     "dev": "concurrently --kill-others-on-fail -n \"api,web\" -c \"blue,green\" \"pnpm --filter @workspace/api-server dev\" \"pnpm --filter @workspace/taxi-fleet dev\"",
     "dev:api": "pnpm --filter @workspace/api-server dev",
     "dev:web": "pnpm --filter @workspace/taxi-fleet dev",
-    "build": "pnpm run typecheck && pnpm --filter @workspace/api-server --if-present run build && pnpm --filter @workspace/taxi-fleet --if-present run build",
+    "build": "node ./scripts/build-wrapper.cjs",
     "vercel-build": "pnpm --filter @workspace/taxi-fleet build",
     "typecheck:libs": "node ./scripts/typecheck-wrapper.cjs",
     "typecheck": "pnpm run typecheck:libs && pnpm --filter @workspace/api-server --if-present run typecheck && pnpm --filter @workspace/taxi-fleet --if-present run typecheck"
