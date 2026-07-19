@@ -13,6 +13,7 @@
       "use": "@vercel/node"
     }
   ],
+  "outputDirectory": "dist",
   "routes": [
     {
       "src": "/api/simulate/(.*)",
@@ -29,6 +30,5 @@
       "src": "/(.*)",
       "dest": "/index.html"
     }
-  ],
-  "outputDirectory": "artifacts/taxi-fleet/dist"
+  ]
 }
