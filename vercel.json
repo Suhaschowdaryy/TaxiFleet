@@ -1,34 +1,20 @@
 {
-  "version": 2,
   "buildCommand": "pnpm run build",
   "installCommand": "pnpm install --ignore-scripts",
-  "builds": [
-    {
-      "src": "artifacts/taxi-fleet/package.json",
-      "use": "@vercel/static-build",
-      "config": { "distDir": "dist" }
-    },
-    {
-      "src": "api/**/*.ts",
-      "use": "@vercel/node"
-    }
-  ],
   "outputDirectory": "dist",
-  "routes": [
+  "functions": {
+    "api/**/*.ts": {
+      "runtime": "@vercel/node"
+    }
+  },
+  "rewrites": [
     {
-      "src": "/api/simulate/(.*)",
-      "dest": "/api/simulate/route"
+      "source": "/api/:path*",
+      "destination": "/api/:path*"
     },
     {
-      "src": "/api/(.*)",
-      "dest": "/api/$1"
-    },
-    {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
+      "source": "/:path*",
+      "destination": "/index.html"
     }
   ]
 }
