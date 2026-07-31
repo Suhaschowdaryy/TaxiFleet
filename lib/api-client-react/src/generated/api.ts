@@ -25,6 +25,18 @@ import type {
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 
+type ViteImportMeta = ImportMeta & {
+  env?: {
+    VITE_API_URL?: string;
+  };
+};
+
+const API_URL = (
+  typeof import.meta !== "undefined"
+    ? (import.meta as ViteImportMeta).env?.VITE_API_URL
+    : undefined
+)?.replace(/\/$/, "") ?? "";
+
 type AwaitedInput<T> = PromiseLike<T> | T;
 
 type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
@@ -35,7 +47,7 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
  * @summary Health check
  */
 export const getHealthCheckUrl = () => {
-  return `/api/healthz`;
+  return `${API_URL}/api/healthz`;
 };
 
 export const healthCheck = async (
@@ -48,7 +60,7 @@ export const healthCheck = async (
 };
 
 export const getHealthCheckQueryKey = () => {
-  return [`/api/healthz`] as const;
+  return [`${API_URL}/api/healthz`] as const;
 };
 
 export const getHealthCheckQueryOptions = <
@@ -110,7 +122,7 @@ export function useHealthCheck<
  * @summary Run taxi simulation step
  */
 export const getRunSimulationUrl = () => {
-  return `/api/simulate`;
+  return `${API_URL}/api/simulate`;
 };
 
 export const runSimulation = async (
@@ -196,7 +208,7 @@ export const useRunSimulation = <
  * @summary Reset the simulation
  */
 export const getResetSimulationUrl = () => {
-  return `/api/simulate/reset`;
+  return `${API_URL}/api/simulate/reset`;
 };
 
 export const resetSimulation = async (
@@ -277,7 +289,7 @@ export const useResetSimulation = <
  * @summary Get current simulation state
  */
 export const getGetSimulationStateUrl = () => {
-  return `/api/simulate/state`;
+  return `${API_URL}/api/simulate/state`;
 };
 
 export const getSimulationState = async (
@@ -290,7 +302,7 @@ export const getSimulationState = async (
 };
 
 export const getGetSimulationStateQueryKey = () => {
-  return [`/api/simulate/state`] as const;
+  return [`${API_URL}/api/simulate/state`] as const;
 };
 
 export const getGetSimulationStateQueryOptions = <
